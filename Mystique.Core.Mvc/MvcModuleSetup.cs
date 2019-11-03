@@ -11,12 +11,12 @@ namespace Mystique.Core.Mvc
 {
     public class MvcModuleSetup : IMvcModuleSetup
     {
-        private readonly ApplicationPartManager partManager;
+        private readonly ApplicationPartManager applicationPartManager;
         private readonly IReferenceLoader referenceLoader;
 
-        public MvcModuleSetup(ApplicationPartManager partManager, IReferenceLoader referenceLoader)
+        public MvcModuleSetup(ApplicationPartManager applicationPartManager, IReferenceLoader referenceLoader)
         {
-            this.partManager = partManager;
+            this.applicationPartManager = applicationPartManager;
             this.referenceLoader = referenceLoader;
         }
 
@@ -36,7 +36,7 @@ namespace Mystique.Core.Mvc
                     var controllerAssemblyPart = new MystiqueAssemblyPart(assembly);
 
                     AdditionalReferencePathHolder.AdditionalReferencePaths.Add(filePath);
-                    partManager.ApplicationParts.Add(controllerAssemblyPart);
+                    applicationPartManager.ApplicationParts.Add(controllerAssemblyPart);
                     PluginsLoadContexts.AddPluginContext(moduleName, context);
                 }
             }
@@ -44,7 +44,7 @@ namespace Mystique.Core.Mvc
             {
                 var context = PluginsLoadContexts.GetContext(moduleName);
                 var controllerAssemblyPart = new MystiqueAssemblyPart(context.Assemblies.First());
-                partManager.ApplicationParts.Add(controllerAssemblyPart);
+                applicationPartManager.ApplicationParts.Add(controllerAssemblyPart);
             }
 
             await ResetControllerActionsAsync();
@@ -52,10 +52,10 @@ namespace Mystique.Core.Mvc
 
         public async Task DisableModuleAsync(string moduleName)
         {
-            var find = partManager.ApplicationParts.First(p => p.Name == moduleName);
+            var find = applicationPartManager.ApplicationParts.First(p => p.Name == moduleName);
             if (find != null)
             {
-                partManager.ApplicationParts.Remove(find);
+                applicationPartManager.ApplicationParts.Remove(find);
                 await ResetControllerActionsAsync();
             }
         }

@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
 
 namespace Mystique.Core
 {
@@ -21,12 +20,5 @@ namespace Mystique.Core
         public static CollectibleAssemblyLoadContext GetContext(string pluginName) => pluginContexts[pluginName];
 
         public static void AddPluginContext(string pluginName, CollectibleAssemblyLoadContext context) => pluginContexts.Add(pluginName, context);
-
-        public static dynamic Controllers()
-        {
-            var methods = pluginContexts.SelectMany(o => o.Value.Assemblies).SelectMany(a => a.GetExportedTypes()).Where(t => t.BaseType?.FullName == "Microsoft.AspNetCore.Mvc.Controller").SelectMany(t => t.GetMethods());
-
-            return methods;
-        }
     }
 }
