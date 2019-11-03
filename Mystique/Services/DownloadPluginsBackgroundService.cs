@@ -1,11 +1,9 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Mystique.Core.DomainModel;
 using Mystique.Core.Interfaces;
-using Mystique.Core.Repositories;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -21,16 +19,14 @@ namespace Mystique.Services
     public class DownloadPluginsBackgroundService : BackgroundService
     {
         private readonly IServiceScope serviceScope;
-        private readonly PluginDbContext pluginDbContext;
-        private readonly IUnitOfWork unitOfWork;
+        private readonly IMvcPluginSetup mvcPluginSetup;
         private readonly FtpClient.FtpClientOption ftpClientOption;
         private readonly ILogger<DownloadPluginsBackgroundService> logger;
 
         public DownloadPluginsBackgroundService(IConfiguration configuration, IServiceScopeFactory serviceScopeFactory, ILoggerFactory loggerFactory)
         {
             serviceScope = serviceScopeFactory.CreateScope();
-            pluginDbContext = serviceScope.ServiceProvider.GetRequiredService<PluginDbContext>();
-            unitOfWork = serviceScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            mvcPluginSetup = serviceScope.ServiceProvider.GetRequiredService<IMvcPluginSetup>();
             ftpClientOption = configuration.GetSection("FtpClientOption").Get<FtpClient.FtpClientOption>();
             logger = loggerFactory.CreateLogger<DownloadPluginsBackgroundService>();
         }
@@ -64,14 +60,14 @@ namespace Mystique.Services
 
         private async Task DetectAndUpdatePlugins(FtpClient ftpClient)
         {
-            var dbFiles = await pluginDbContext.FtpFileDetails.ToArrayAsync();
-            var ftpFiles = await ftpClient.GetFileDetailsAsync();
+            var cachePlugins = await mvcPluginSetup.GetPluginsAsync();
+            var ftpPlugins = await ftpClient.GetFileDetailsAsync();
 
-            foreach (var o in dbFiles.Select(o => o.Name).Concat(ftpFiles.Select(o => o.name)).Distinct())
+            foreach (var o in cachePlugins.Select(o => o.ZipFileName).Concat(ftpPlugins.Select(o => o.name)).Distinct())
             {
-                var cache = dbFiles.FirstOrDefault(x => x.Name == o); // cache
-                var (name, size, modified) = ftpFiles.FirstOrDefault(x => x.name == o); // current
-                if (size != cache?.Size || modified != cache?.Modified)
+                var cache = cachePlugins.FirstOrDefault(x => x.ZipFileName == o); // cache
+                var (name, size, modified) = ftpPlugins.FirstOrDefault(x => x.name == o); // current
+                if (!string.IsNullOrEmpty(name) && (size != cache?.Size || modified != cache?.Modified))
                 {
                     try
                     {
@@ -81,19 +77,13 @@ namespace Mystique.Services
                             var pluginPackage = serviceScope.ServiceProvider.GetRequiredService<PluginPackage>();
                             var pluginManager = serviceScope.ServiceProvider.GetRequiredService<IPluginManager>();
 
+                            // 服务器 ftp 若存在相同名称的插件，会频繁更新\卸载
+                            // TODO 添加维护版本信息
                             await pluginPackage.InitializeAsync(stream);
-                            await pluginManager.AddPluginsAsync(pluginPackage, true);
-                        }
-
-                        // 记录状态
-                        if (cache == null)
-                        {
-                            pluginDbContext.Entry(new Core.ViewModels.FtpFileDetail { Name = name, Size = size, Modified = modified }).State = EntityState.Added;
-                        }
-                        else
-                        {
-                            cache.Size = size;
-                            cache.Modified = modified;
+                            pluginPackage.Configuration.Size = size;
+                            pluginPackage.Configuration.Modified = modified;
+                            pluginPackage.Configuration.ZipFileName = name;
+                            await pluginManager.AddPluginsAsync(pluginPackage);
                         }
                         logger.LogInformation(new EventId(200, "下载并更新插件"), $"name={name},size={size},modified={modified}");
                     }
@@ -103,8 +93,6 @@ namespace Mystique.Services
                     }
                 }
             }
-
-            await unitOfWork.SaveAsync();
         }
 
         public override Task StopAsync(CancellationToken cancellationToken)
@@ -184,6 +172,11 @@ namespace Mystique.Services
 
         public async Task<Stream> DownloadAsync(string serverName)
         {
+            if (serverName is null)
+            {
+                throw new ArgumentNullException(nameof(serverName));
+            }
+
             var request = FastCreateRequest(serverName, WebRequestMethods.Ftp.DownloadFile);
             using (var response = (FtpWebResponse)request.GetResponse())
             {
@@ -193,7 +186,7 @@ namespace Mystique.Services
                 return memoryStream;
             }
 
-            async Task CopyStreamAsync(Stream input, Stream output)
+            static async Task CopyStreamAsync(Stream input, Stream output)
             {
                 var buffer = new byte[16 * 1024];
                 int read;

@@ -7,7 +7,7 @@ namespace Mystique.Core.Contracts
 {
     public class DefaultReferenceLoader : IReferenceLoader
     {
-        private IReferenceContainer referenceContainer;
+        private readonly IReferenceContainer referenceContainer;
         private readonly ILogger<DefaultReferenceLoader> logger;
 
         public DefaultReferenceLoader(IReferenceContainer referenceContainer, ILogger<DefaultReferenceLoader> logger)
@@ -35,7 +35,6 @@ namespace Mystique.Core.Contracts
                 }
                 else
                 {
-
                     if (IsSharedFreamwork(name))
                     {
                         continue;
@@ -68,9 +67,6 @@ namespace Mystique.Core.Contracts
             }
         }
 
-        private bool IsSharedFreamwork(string name)
-        {
-            return SharedFrameworkConst.SharedFrameworkDLLs.Contains($"{name}.dll");
-        }
+        private bool IsSharedFreamwork(string name) => SharedFrameworkConst.SharedFrameworkDLLs.Contains($"{name}.dll");
     }
 }

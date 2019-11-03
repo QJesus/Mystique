@@ -14,14 +14,14 @@ namespace Mystique.Core.DomainModel
         private string folderName;
         private Stream zipStream;
 
-        public PluginConfiguration PluginConfiguration { get; private set; }
+        public PluginModel Configuration { get; private set; }
 
         public async Task InitializeAsync(Stream zipStream)
         {
             var archive = new ZipArchive(this.zipStream = zipStream, ZipArchiveMode.Read);
             zipStream.Position = 0;
             tempFolderName = Path.Combine(Environment.CurrentDirectory, "Mystique_plugins", Guid.NewGuid().ToString());
-            archive.ExtractToDirectory(tempFolderName);
+            archive.ExtractToDirectory(tempFolderName, true);
 
             var folder = new DirectoryInfo(tempFolderName);
             var files = folder.GetFiles();
@@ -31,10 +31,15 @@ namespace Mystique.Core.DomainModel
             {
                 throw new MissingConfigurationFileException();
             }
-            else
+
+            using var stream = configFile.OpenRead();
+            using var sr = new StreamReader(stream);
+            var content = await sr.ReadToEndAsync();
+            Configuration = JsonConvert.DeserializeObject<PluginModel>(content);
+
+            if (Configuration == null)
             {
-                using var s = configFile.OpenRead();
-                await LoadConfigurationAsync(s);
+                throw new WrongFormatConfigurationException();
             }
         }
 
@@ -42,25 +47,13 @@ namespace Mystique.Core.DomainModel
         {
             var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
             zipStream.Position = 0;
-            folderName = Path.Combine(Environment.CurrentDirectory, "Mystique_plugins", PluginConfiguration.Name);
+            folderName = Path.Combine(Environment.CurrentDirectory, "Mystique_plugins", Configuration.Name);
             archive.ExtractToDirectory(folderName, true);
 
             var folder = new DirectoryInfo(tempFolderName);
             if (folder.Exists)
             {
                 folder.Delete(true);
-            }
-        }
-
-        private async Task LoadConfigurationAsync(Stream stream)
-        {
-            using var sr = new StreamReader(stream);
-            var content = await sr.ReadToEndAsync();
-            PluginConfiguration = JsonConvert.DeserializeObject<PluginConfiguration>(content);
-
-            if (PluginConfiguration == null)
-            {
-                throw new WrongFormatConfigurationException();
             }
         }
     }

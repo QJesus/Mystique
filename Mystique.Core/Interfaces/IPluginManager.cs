@@ -1,6 +1,4 @@
 ﻿using Mystique.Core.DomainModel;
-using Mystique.Core.ViewModels;
-using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -8,11 +6,11 @@ namespace Mystique.Core.Interfaces
 {
     public interface IPluginManager
     {
-        Task<List<PluginViewModel>> GetAllPluginsAsync();
-        Task AddPluginsAsync(PluginPackage pluginPackage, bool autoEnabled = false);
-        Task<PluginViewModel> GetPluginAsync(Guid pluginId);
-        Task DeletePluginAsync(Guid pluginId);
-        Task EnablePluginAsync(Guid pluginId);
-        Task DisablePluginAsync(Guid pluginId);
+        Task<List<PluginModel>> GetAllPluginsAsync();
+        Task<PluginModel> GetPluginAsync(string pluginName);
+        Task AddPluginsAsync(PluginPackage pluginPackage);
+        Task RemovePluginAsync(string pluginName);
+        Task EnablePluginAsync(string pluginName);
+        Task DisablePluginAsync(string pluginName);
     }
 }

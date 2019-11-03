@@ -1,20 +1,16 @@
 ﻿using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Mystique.Core.Contracts;
 using Mystique.Core.DomainModel;
 using Mystique.Core.Interfaces;
-using Mystique.Core.Repositories;
 using Mystique.Mvc.Infrastructure;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Threading.Tasks;
 
 namespace Mystique.Core.Mvc.Infrastructure
 {
@@ -22,64 +18,53 @@ namespace Mystique.Core.Mvc.Infrastructure
     {
         private static readonly IList<string> presets = new List<string>();
 
-        public static async Task MystiqueSetupAsync(this IServiceCollection services, IConfiguration configuration)
+        public static void MystiqueSetup(this IServiceCollection services)
         {
             services.AddOptions();
-            services.AddDbContext<PluginDbContext>(options =>
-            {
-                var connectionString = configuration.GetConnectionString("PluginsConnectionString");
-                // options.UseSqlServer(connectionString);
-                options.UseSqlite(connectionString);
-                options.EnableSensitiveDataLogging(true);
-                options.EnableDetailedErrors(true);
-            });
-
-            services.AddSingleton<IMvcModuleSetup, MvcModuleSetup>();
-            services.AddScoped<IPluginManager, PluginManager>();
-            services.AddScoped<IUnitOfWork, UnitOfWork>();
+            services.AddSingleton<IMvcPluginSetup, MvcPluginSetup>();
             services.AddSingleton<IReferenceContainer, DefaultReferenceContainer>();
             services.AddSingleton<IReferenceLoader, DefaultReferenceLoader>();
-            services.AddScoped<IPluginRepository, PluginRepository>();
             services.AddSingleton<IActionDescriptorChangeProvider>(MystiqueActionDescriptorChangeProvider.Instance);
             services.AddSingleton(MystiqueActionDescriptorChangeProvider.Instance);
             services.AddScoped<PluginPackage>();
+            services.AddScoped<IPluginManager, PluginManager>();
 
             var mvcBuilder = services.AddMvc();
 
-            var provider = services.BuildServiceProvider();
-            using (var scope = provider.CreateScope())
+            var pluginFolder = Path.Combine(Environment.CurrentDirectory, "Mystique_plugins");
+            var plugins_cache = Path.Combine(pluginFolder, "plugins_cache.json");
+            if (File.Exists(plugins_cache))
             {
-                var db = scope.ServiceProvider.GetService<PluginDbContext>();
-                var databaseCreator = (RelationalDatabaseCreator)db.Database.GetService<IDatabaseCreator>();
-                databaseCreator.Delete();
-                if (!databaseCreator.HasTables())
+                using var scope = services.BuildServiceProvider().CreateScope();
+                var refsLoader = scope.ServiceProvider.GetService<IReferenceLoader>();
+                var loggerFactory = scope.ServiceProvider.GetService<ILoggerFactory>();
+                var plugins = JsonConvert.DeserializeObject<PluginModel[]>(File.ReadAllText(plugins_cache, System.Text.Encoding.UTF8));
+                foreach (var plugin in plugins)
                 {
-                    databaseCreator.CreateTables();
-                }
-
-                var option = scope.ServiceProvider.GetService<MvcRazorRuntimeCompilationOptions>();
-
-                var unitOfWork = scope.ServiceProvider.GetService<IUnitOfWork>();
-                var pluginRepository = scope.ServiceProvider.GetService<IPluginRepository>();
-                var allEnabledPlugins = await pluginRepository.GetAllEnabledPluginsAsync();
-                var loader = scope.ServiceProvider.GetService<IReferenceLoader>();
-
-                foreach (var plugin in allEnabledPlugins)
-                {
-                    var context = new CollectibleAssemblyLoadContext();
-                    var moduleName = plugin.Name;
-                    var filePath = Path.Combine(Environment.CurrentDirectory, "Mystique_plugins", moduleName, $"{moduleName}.dll");
-                    var referenceFolderPath = Path.GetDirectoryName(filePath);
-
-                    presets.Add(filePath);
-                    using (var fs = new FileStream(filePath, FileMode.Open))
+                    var filePath = Path.Combine(pluginFolder, plugin.Name, $"{plugin}.dll");
+                    if (!File.Exists(filePath))
                     {
-                        var assembly = context.LoadFromStream(fs);
-                        loader.LoadStreamsIntoContext(context, referenceFolderPath, assembly);
+                        continue;
+                    }
 
-                        var controllerAssemblyPart = new MystiqueAssemblyPart(assembly);
-                        mvcBuilder.PartManager.ApplicationParts.Add(controllerAssemblyPart);
-                        PluginsLoadContexts.AddPluginContext(plugin.Name, context);
+                    try
+                    {
+                        var referenceFolderPath = Path.GetDirectoryName(filePath);
+                        using (var fs = new FileStream(filePath, FileMode.Open))
+                        {
+                            var context = plugin.PluginContext = new CollectibleAssemblyLoadContext();
+                            var assembly = context.LoadFromStream(fs);
+                            refsLoader.LoadStreamsIntoContext(context, referenceFolderPath, assembly);
+
+                            var controllerAssemblyPart = new MystiqueAssemblyPart(assembly);
+                            mvcBuilder.PartManager.ApplicationParts.Add(controllerAssemblyPart);
+                            PluginsLoadContexts.UpsertPluginContext(plugin);
+                        }
+                        presets.Add(filePath);
+                    }
+                    catch (Exception ex)
+                    {
+                        loggerFactory.CreateLogger<CollectibleAssemblyLoadContext>().LogWarning(new EventId(450), $"加载插件失败 '{plugin}'", ex);
                     }
                 }
             }
