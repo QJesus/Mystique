@@ -88,8 +88,11 @@ namespace Mystique.Core.Mvc
             if (parts.Any())
             {
                 await ResetControllerActionsAsync();
+            }
 
-                var pluginModel = PluginsLoadContexts.GetPlugin(pluginName);
+            var pluginModel = PluginsLoadContexts.GetPlugin(pluginName);
+            if (pluginModel != null)
+            {
                 pluginModel.IsEnabled = false;
                 PluginsLoadContexts.UpsertPluginContext(pluginModel);
             }
