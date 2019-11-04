@@ -30,9 +30,9 @@ namespace Mystique.Controllers
             // https://stackoverflow.com/questions/41908957/get-all-registered-routes-in-asp-net-core
             var actions = actionDescriptorCollectionProvider.ActionDescriptors.Items.Select(a => new
             {
-                Area = a.RouteValues["area"],
-                Action = a.RouteValues["action"],
-                Controller = a.RouteValues["controller"],
+                Area = a.RouteValues.FirstOrDefault(o => o.Key == "area").Value,
+                Action = a.RouteValues.FirstOrDefault(o => o.Key == "action").Value,
+                Controller = a.RouteValues.FirstOrDefault(o => o.Key == "controller").Value,
                 Name = a.AttributeRouteInfo?.Name,
                 Templates = new string[] { a.AttributeRouteInfo?.Template },
                 HttpMethods = a.ActionConstraints?.OfType<HttpMethodActionConstraint>().SelectMany(o => o.HttpMethods),

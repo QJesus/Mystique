@@ -46,10 +46,8 @@ namespace Mystique.Core.Mvc
             {
                 pluginModel = PluginsLoadContexts.GetPlugin(pluginName);
                 var context = pluginModel.PluginContext;
-                foreach (var controllerAssemblyPart in context.Assemblies.Select(o => new MystiqueAssemblyPart(o)))
-                {
-                    applicationPartManager.ApplicationParts.Add(controllerAssemblyPart);
-                }
+                var controllerAssemblyPart = new MystiqueAssemblyPart(context.Assemblies.First());
+                applicationPartManager.ApplicationParts.Add(controllerAssemblyPart);
             }
             else
             {
