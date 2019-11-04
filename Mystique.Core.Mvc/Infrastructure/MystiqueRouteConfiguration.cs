@@ -14,7 +14,7 @@ namespace Mystique.Core.Mvc.Infrastructure
         {
             lifetime.ApplicationStopped.Register(() =>
             {
-                var json = JsonConvert.SerializeObject(PluginsLoadContexts.GetPlugins().Select(o =>
+                var json = JsonConvert.SerializeObject(PluginsLoadContexts.GetPlugins(all: true).Select(o =>
                 {
                     o.PluginContext = null;
                     return o;

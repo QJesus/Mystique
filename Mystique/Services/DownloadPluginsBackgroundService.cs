@@ -60,7 +60,7 @@ namespace Mystique.Services
 
         private async Task DetectAndUpdatePlugins(FtpClient ftpClient)
         {
-            var cachePlugins = await mvcPluginSetup.GetPluginsAsync();
+            var cachePlugins = await mvcPluginSetup.GetPluginsAsync(all: true);
             var ftpPlugins = await ftpClient.GetFileDetailsAsync();
 
             foreach (var o in cachePlugins.Select(o => o.ZipFileName).Concat(ftpPlugins.Select(o => o.name)).Distinct())

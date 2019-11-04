@@ -21,7 +21,7 @@ namespace Mystique.Core.Mvc
             this.referenceLoader = referenceLoader;
         }
 
-        public async Task<List<PluginModel>> GetPluginsAsync() => await Task.FromResult(PluginsLoadContexts.GetPlugins());
+        public async Task<List<PluginModel>> GetPluginsAsync(bool all = false) => await Task.FromResult(PluginsLoadContexts.GetPlugins(all));
 
         public async Task EnablePluginAsync(string pluginName)
         {

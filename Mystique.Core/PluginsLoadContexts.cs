@@ -22,6 +22,7 @@ namespace Mystique.Core
         public bool AutoEnable { get; set; }
         public string ZipFileName { get; set; }
         public long Size { get; set; }
+        public bool IsDeleted { get; set; }
         public DateTime Modified { get; set; }
         public CollectibleAssemblyLoadContext PluginContext { get; set; }
     }
@@ -31,22 +32,22 @@ namespace Mystique.Core
     {
         private static readonly Dictionary<string, PluginModel> pluginContexts = new Dictionary<string, PluginModel>();
 
-        private static readonly string pluginFolder = Path.Combine(Environment.CurrentDirectory, "Mystique_plugins", "plugins_cache.json");
-
-        public static bool Any(string pluginName) => pluginContexts.ContainsKey(pluginName);
+        public static bool Any(string pluginName) => pluginContexts.ContainsKey(pluginName) && !pluginContexts[pluginName].IsDeleted;
 
         public static void RemovePluginContext(string pluginName)
         {
             if (Any(pluginName))
             {
-                pluginContexts[pluginName].PluginContext.Unload();
-                pluginContexts.Remove(pluginName);
+                var context = pluginContexts[pluginName];
+                context.PluginContext.Unload();
+                context.IsDeleted = true;
+                pluginContexts[pluginName] = context;
             }
         }
 
         public static PluginModel GetPlugin(string pluginName) => Any(pluginName) ? pluginContexts[pluginName] : null;
 
-        public static List<PluginModel> GetPlugins() => pluginContexts.Keys.Select(k => pluginContexts[k]).ToList();
+        public static List<PluginModel> GetPlugins(bool all = false) => pluginContexts.Keys.Select(k => pluginContexts[k]).Where(k => all || !k.IsDeleted).ToList();
 
         public static void UpsertPluginContext(PluginModel pluginModel)
         {
