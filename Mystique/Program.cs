@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
+using System.Text;
 
 namespace Mystique
 {
@@ -7,6 +8,7 @@ namespace Mystique
     {
         public static void Main(string[] args)
         {
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);  // 支持 GB2312 和 GBK 编码
             CreateHostBuilder(args).Build().Run();
         }
 
