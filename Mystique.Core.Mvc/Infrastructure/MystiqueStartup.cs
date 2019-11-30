@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.Razor;
-using Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Mystique.Core.Contracts;
@@ -41,7 +40,7 @@ namespace Mystique.Core.Mvc.Infrastructure
                 var plugins = JsonConvert.DeserializeObject<PluginModel[]>(File.ReadAllText(plugins_cache, System.Text.Encoding.UTF8));
                 foreach (var plugin in plugins)
                 {
-                    var filePath = Path.Combine(pluginFolder, plugin.Name, $"{plugin}.dll");
+                    var filePath = Path.Combine(pluginFolder, plugin.Name, $"{plugin.Name}.dll");
                     if (!File.Exists(filePath))
                     {
                         continue;

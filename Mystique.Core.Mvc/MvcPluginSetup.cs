@@ -6,7 +6,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Threading.Tasks;
+using System.Text;
+using Newtonsoft.Json.Linq;
 
 namespace Mystique.Core.Mvc
 {
@@ -14,11 +17,13 @@ namespace Mystique.Core.Mvc
     {
         private readonly ApplicationPartManager applicationPartManager;
         private readonly IReferenceLoader referenceLoader;
+        private readonly HttpClient httpClient;
 
-        public MvcPluginSetup(ApplicationPartManager applicationPartManager, IReferenceLoader referenceLoader)
+        public MvcPluginSetup(ApplicationPartManager applicationPartManager, IReferenceLoader referenceLoader, IHttpClientFactory httpClientFactory)
         {
             this.applicationPartManager = applicationPartManager;
             this.referenceLoader = referenceLoader;
+            httpClient = httpClientFactory.CreateClient("internal-client");
         }
 
         public async Task<List<PluginModel>> GetPluginsAsync(bool all = false) => await Task.FromResult(PluginsLoadContexts.GetPlugins(all));
@@ -69,6 +74,22 @@ namespace Mystique.Core.Mvc
             pluginModel.IsEnabled = true;
             PluginsLoadContexts.UpsertPluginContext(pluginModel);
             await ResetControllerActionsAsync();
+
+            await RunConnectMethods(pluginModel.Name);
+        }
+
+        public async Task RunConnectMethods(string pluginName)
+        {
+            var filePath = Path.Combine(Environment.CurrentDirectory, "Mystique_plugins", pluginName, "appsettings.json");
+            if (!File.Exists(filePath))
+            {
+                return;
+            }
+            var methods = JObject.Parse(File.ReadAllText(filePath, Encoding.UTF8))["GET_Connect"] as JArray;
+            foreach (var method in methods)
+            {
+                await httpClient.GetAsync(method.ToObject<string>());
+            }
         }
 
         public async Task DisablePluginAsync(string pluginName)
@@ -77,6 +98,8 @@ namespace Mystique.Core.Mvc
             {
                 throw new ArgumentNullException(nameof(pluginName));
             }
+
+            await RunDisconnectMehods(pluginName);
 
             var parts = applicationPartManager.ApplicationParts.Where(o => o.Name == pluginName).ToArray();
             foreach (var part in parts)
@@ -93,6 +116,20 @@ namespace Mystique.Core.Mvc
             {
                 pluginModel.IsEnabled = false;
                 PluginsLoadContexts.UpsertPluginContext(pluginModel);
+            }
+        }
+
+        public async Task RunDisconnectMehods(string pluginName)
+        {
+            var filePath = Path.Combine(Environment.CurrentDirectory, "Mystique_plugins", pluginName, "appsettings.json");
+            if (!File.Exists(filePath))
+            {
+                return;
+            }
+            var methods = JObject.Parse(File.ReadAllText(filePath, Encoding.UTF8))["DELETE_Disconnect"] as JArray;
+            foreach (var method in methods)
+            {
+                await httpClient.DeleteAsync(method.ToObject<string>());
             }
         }
 

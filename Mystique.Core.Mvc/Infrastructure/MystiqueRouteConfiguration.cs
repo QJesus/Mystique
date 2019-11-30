@@ -12,7 +12,7 @@ namespace Mystique.Core.Mvc.Infrastructure
     {
         public static IApplicationBuilder MystiqueRoute(this IApplicationBuilder app, IHostApplicationLifetime lifetime)
         {
-            lifetime.ApplicationStopped.Register(() =>
+            lifetime.ApplicationStopping.Register(() =>
             {
                 var json = JsonConvert.SerializeObject(PluginsLoadContexts.GetPlugins(all: true).Select(o =>
                 {
@@ -32,7 +32,7 @@ namespace Mystique.Core.Mvc.Infrastructure
 
                 routes.MapControllerRoute(
                     name: "Plugins",
-                    pattern: "Plugins/{area}/{controller=Home}/{action=Index}/{id?}");
+                    pattern: "{area}/{controller=Home}/{action=Index}/{id?}");
             });
 
             return app;

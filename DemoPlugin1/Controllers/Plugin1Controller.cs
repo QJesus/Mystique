@@ -1,4 +1,4 @@
-﻿using DemoReferenceLibrary;
+﻿using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using System;
@@ -6,15 +6,18 @@ using System.IO;
 
 namespace DemoPlugin1.Controllers
 {
+    /// <summary>
+    ///     需要读取本插件配置文件的项目，需要继承于此抽象类
+    /// </summary>
     public abstract class ApiBaseController : Controller
     {
-        protected readonly IConfiguration configuration;
-        public ApiBaseController()
+        protected static readonly IConfiguration configuration;
+
+        static ApiBaseController()
         {
             var builder = new ConfigurationBuilder()
                 .SetBasePath(Path.Combine(Environment.CurrentDirectory, "Mystique_plugins", nameof(DemoPlugin1)))
-                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-                .AddEnvironmentVariables();
+                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
             configuration = builder.Build();
         }
     }
@@ -23,10 +26,12 @@ namespace DemoPlugin1.Controllers
     public class Plugin1Controller : ApiBaseController
     {
         private readonly IConfiguration rootConfig;
+        private readonly IWebHostEnvironment webHostEnvironment;
 
-        public Plugin1Controller(IConfiguration rootConfig)
+        public Plugin1Controller(IConfiguration rootConfig, IWebHostEnvironment webHostEnvironment)
         {
             this.rootConfig = rootConfig;
+            this.webHostEnvironment = webHostEnvironment;
         }
 
         [HttpGet]
@@ -35,8 +40,7 @@ namespace DemoPlugin1.Controllers
         [HttpGet]
         public IActionResult HelloWorld()
         {
-            var content = new Demo().SayHello();
-            ViewBag.Content = content;
+            ViewBag.Content = configuration.GetSection("HelloWorld").Get<string>() ?? "undefined";
             return View();
         }
 
@@ -45,6 +49,34 @@ namespace DemoPlugin1.Controllers
         {
             var host = rootConfig.GetSection("FtpClientOption:Host").Get<string>();
             return Content(host);
+        }
+
+        [HttpGet]
+        public IActionResult dir()
+        {
+            return Json(new
+            {
+                host = webHostEnvironment.ContentRootPath,
+                env = Environment.CurrentDirectory,
+            });
+        }
+
+        [HttpGet]
+        [HttpDelete]
+        public IActionResult write()
+        {
+            var file = Path.Combine(webHostEnvironment.ContentRootPath, "write.txt");
+            if (string.Equals("GET", Request.Method, StringComparison.OrdinalIgnoreCase))
+            {
+                System.IO.File.AppendAllText(file, DateTime.Now.ToString());
+                return Ok(Request.Method);
+            }
+            if (string.Equals("DELETE", Request.Method, StringComparison.OrdinalIgnoreCase))
+            {
+                System.IO.File.Delete(file);
+                return Ok(Request.Method);
+            }
+            return BadRequest(Request.Method);
         }
     }
 }

@@ -20,6 +20,11 @@ namespace Mystique
         public void ConfigureServices(IServiceCollection services)
         {
             services.MystiqueSetup();
+            services.AddHttpClient("internal-client", client =>
+            {
+                client.BaseAddress = new System.Uri(Configuration.GetSection("Kestrel:Endpoints:Http:Url").Get<string>().Replace("*", "127.0.0.1"));
+            });
+            services.AddHttpClient("http-client");
             services.AddHostedService<Services.DownloadPluginsBackgroundService>();
         }
 
