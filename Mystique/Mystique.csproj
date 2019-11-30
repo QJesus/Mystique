@@ -7,9 +7,13 @@
 
   <ItemGroup>
     <Compile Remove="host_plugins\**" />
+    <Compile Remove="Mystique_plugins\**" />
     <Content Remove="host_plugins\**" />
+    <Content Remove="Mystique_plugins\**" />
     <EmbeddedResource Remove="host_plugins\**" />
+    <EmbeddedResource Remove="Mystique_plugins\**" />
     <None Remove="host_plugins\**" />
+    <None Remove="Mystique_plugins\**" />
   </ItemGroup>
 
   <ItemGroup>
