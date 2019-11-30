@@ -23,7 +23,10 @@ namespace Mystique.Core.Mvc.Infrastructure
                 File.WriteAllText(pluginFolder, json, Encoding.UTF8);
             });
 
+            app.UseStaticFiles();
+
             app.UseRouting();
+
             app.UseEndpoints(routes =>
             {
                 routes.MapControllerRoute(

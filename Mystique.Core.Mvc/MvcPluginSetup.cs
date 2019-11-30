@@ -75,10 +75,11 @@ namespace Mystique.Core.Mvc
             PluginsLoadContexts.UpsertPluginContext(pluginModel);
             await ResetControllerActionsAsync();
 
-            await RunConnectMethods(pluginModel.Name);
+            await RunConnectMethods(pluginName);
+            Wwwroot(pluginName, true);
         }
 
-        public async Task RunConnectMethods(string pluginName)
+        private async Task RunConnectMethods(string pluginName)
         {
             var filePath = Path.Combine(Environment.CurrentDirectory, "Mystique_plugins", pluginName, "appsettings.json");
             if (!File.Exists(filePath))
@@ -92,6 +93,30 @@ namespace Mystique.Core.Mvc
             }
         }
 
+        private void Wwwroot(string pluginName, bool enable)
+        {
+            var srcFolder = new DirectoryInfo(Path.Combine(Environment.CurrentDirectory, "Mystique_plugins", pluginName, "wwwroot"));
+            var destFolder = new DirectoryInfo(Path.Combine(Environment.CurrentDirectory, "wwwroot", pluginName));
+            if (enable)
+            {
+                // 启用，从插件拷贝到宿主
+                if (destFolder.Exists)
+                {
+                    destFolder.Delete(true);
+                }
+                srcFolder.MoveTo(destFolder.FullName);
+            }
+            else
+            {
+                // 禁用，从宿主拷贝到插件
+                if (srcFolder.Exists)
+                {
+                    srcFolder.Delete(true);
+                }
+                destFolder.MoveTo(srcFolder.FullName);
+            }
+        }
+
         public async Task DisablePluginAsync(string pluginName)
         {
             if (pluginName is null)
@@ -100,6 +125,7 @@ namespace Mystique.Core.Mvc
             }
 
             await RunDisconnectMehods(pluginName);
+            Wwwroot(pluginName, false);
 
             var parts = applicationPartManager.ApplicationParts.Where(o => o.Name == pluginName).ToArray();
             foreach (var part in parts)
