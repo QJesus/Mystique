@@ -30,7 +30,7 @@ namespace Mystique.Core.Mvc.Infrastructure
 
             var mvcBuilder = services.AddMvc();
 
-            var pluginFolder = Path.Combine(Environment.CurrentDirectory, "Mystique_plugins");
+            var pluginFolder = Path.Combine(Environment.CurrentDirectory, "host_plugins");
             var plugins_cache = Path.Combine(pluginFolder, "plugins_cache.json");
             if (File.Exists(plugins_cache))
             {

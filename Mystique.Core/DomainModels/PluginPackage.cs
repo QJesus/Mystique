@@ -20,7 +20,7 @@ namespace Mystique.Core.DomainModel
         {
             var archive = new ZipArchive(this.zipStream = zipStream, ZipArchiveMode.Read);
             zipStream.Position = 0;
-            tempFolderName = Path.Combine(Environment.CurrentDirectory, "Mystique_plugins", Guid.NewGuid().ToString());
+            tempFolderName = Path.Combine(Environment.CurrentDirectory, "host_plugins", Guid.NewGuid().ToString());
             archive.ExtractToDirectory(tempFolderName, true);
 
             var folder = new DirectoryInfo(tempFolderName);
@@ -47,7 +47,7 @@ namespace Mystique.Core.DomainModel
         {
             var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
             zipStream.Position = 0;
-            folderName = Path.Combine(Environment.CurrentDirectory, "Mystique_plugins", Configuration.Name);
+            folderName = Path.Combine(Environment.CurrentDirectory, "host_plugins", Configuration.Name);
             archive.ExtractToDirectory(folderName, true);
 
             var folder = new DirectoryInfo(tempFolderName);

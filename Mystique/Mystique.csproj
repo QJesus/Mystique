@@ -6,10 +6,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Mystique_Plugins\**" />
-    <Content Remove="Mystique_Plugins\**" />
-    <EmbeddedResource Remove="Mystique_Plugins\**" />
-    <None Remove="Mystique_Plugins\**" />
+    <Compile Remove="host_plugins\**" />
+    <Content Remove="host_plugins\**" />
+    <EmbeddedResource Remove="host_plugins\**" />
+    <None Remove="host_plugins\**" />
   </ItemGroup>
 
   <ItemGroup>

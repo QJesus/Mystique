@@ -19,7 +19,7 @@ namespace Mystique.Core.Mvc.Infrastructure
                     o.PluginContext = null;
                     return o;
                 }));
-                var pluginFolder = Path.Combine(Environment.CurrentDirectory, "Mystique_plugins", "plugins_cache.json");
+                var pluginFolder = Path.Combine(Environment.CurrentDirectory, "host_plugins", "plugins_cache.json");
                 File.WriteAllText(pluginFolder, json, Encoding.UTF8);
             });
 

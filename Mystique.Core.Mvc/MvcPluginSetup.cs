@@ -58,7 +58,7 @@ namespace Mystique.Core.Mvc
             {
                 var context = pluginModel.PluginContext = new CollectibleAssemblyLoadContext();
 
-                var filePath = Path.Combine(Environment.CurrentDirectory, "Mystique_plugins", pluginName, $"{pluginName}.dll");
+                var filePath = Path.Combine(Environment.CurrentDirectory, "host_plugins", pluginName, $"{pluginName}.dll");
                 var referenceFolderPath = Path.GetDirectoryName(filePath);
                 using (var fs = new FileStream(filePath, FileMode.Open))
                 {
@@ -81,7 +81,7 @@ namespace Mystique.Core.Mvc
 
         private async Task RunConnectMethods(string pluginName)
         {
-            var filePath = Path.Combine(Environment.CurrentDirectory, "Mystique_plugins", pluginName, "appsettings.json");
+            var filePath = Path.Combine(Environment.CurrentDirectory, "host_plugins", pluginName, "appsettings.json");
             if (!File.Exists(filePath))
             {
                 return;
@@ -95,7 +95,7 @@ namespace Mystique.Core.Mvc
 
         private void Wwwroot(string pluginName, bool enable)
         {
-            var srcFolder = new DirectoryInfo(Path.Combine(Environment.CurrentDirectory, "Mystique_plugins", pluginName, "wwwroot"));
+            var srcFolder = new DirectoryInfo(Path.Combine(Environment.CurrentDirectory, "host_plugins", pluginName, "wwwroot"));
             var destFolder = new DirectoryInfo(Path.Combine(Environment.CurrentDirectory, "wwwroot", pluginName));
             if (enable)
             {
@@ -147,7 +147,7 @@ namespace Mystique.Core.Mvc
 
         public async Task RunDisconnectMehods(string pluginName)
         {
-            var filePath = Path.Combine(Environment.CurrentDirectory, "Mystique_plugins", pluginName, "appsettings.json");
+            var filePath = Path.Combine(Environment.CurrentDirectory, "host_plugins", pluginName, "appsettings.json");
             if (!File.Exists(filePath))
             {
                 return;
@@ -171,7 +171,7 @@ namespace Mystique.Core.Mvc
 
             await Task.Run(() =>
             {
-                var directory = new DirectoryInfo(Path.Combine(Environment.CurrentDirectory, "Mystique_plugins", pluginName));
+                var directory = new DirectoryInfo(Path.Combine(Environment.CurrentDirectory, "host_plugins", pluginName));
                 if (directory.Exists)
                 {
                     directory.Delete(true);

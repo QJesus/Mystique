@@ -15,8 +15,11 @@ namespace DemoPlugin1.Controllers
 
         static ApiBaseController()
         {
+            var path1 = new DirectoryInfo(Path.Combine(Environment.CurrentDirectory, "host_plugins", "DemoPlugin1"));
+            var path2 = new DirectoryInfo(Environment.CurrentDirectory);
+
             var builder = new ConfigurationBuilder()
-                .SetBasePath(Path.Combine(Environment.CurrentDirectory, "Mystique_plugins", nameof(DemoPlugin1)))
+                .SetBasePath(path1.Exists ? path1.FullName : path2.FullName)
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
             configuration = builder.Build();
         }
