@@ -2,8 +2,6 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Mystique.Core.Mvc.Infrastructure;
 using Ocelot.DependencyInjection;
 using Ocelot.Middleware;
 
@@ -21,31 +19,26 @@ namespace Mystique
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.MystiqueSetup();
+            services.AddMvc();
             services.AddHttpClient("internal-client", client =>
             {
                 client.BaseAddress = new System.Uri(Configuration.GetSection("Kestrel:Endpoints:Http:Url").Get<string>().Replace("*", "127.0.0.1"));
             });
-            services.AddHttpClient("http-client");
             services.AddOcelot();
-            services.AddHostedService<Services.DownloadPluginsBackgroundService>();
+            // services.AddHostedService<Services.DownloadPluginsBackgroundService>();
         }
 
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, IHostApplicationLifetime lifetime)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
-            if (env.IsDevelopment())
-            {
-            }
-            else
-            {
-            }
-
             app.UseDeveloperExceptionPage();
-
             app.UseStaticFiles();
-
-            app.MystiqueRoute(lifetime);
-
+            app.UseRouting();
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapControllerRoute(
+                   name: "default",
+                   pattern: "{controller=Home}/{action=Index}/{id?}");
+            });
             app.UseOcelot().Wait();
         }
     }

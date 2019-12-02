@@ -328,5 +328,5 @@ ASALocalRun/
 
 # MFractors (Xamarin productivity tool) working folder 
 .mfractor/
-Mystique/Mystique.Plugins.db
 Mystique/host_plugins
+Mystique/host_pids

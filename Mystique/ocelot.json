@@ -6,11 +6,11 @@
       "DownstreamHostAndPorts": [
         {
           "Host": "127.0.0.1",
-          "Port": 59198
+          "Port": 18080
         }
       ],
       "UpstreamPathTemplate": "/Miao.Web/{url}",
-      "UpstreamHttpMethod": []
+      "UpstreamHttpMethod": [ "GET", "HEAD", "POST", "OPTIONS", "PUT", "DELETE", "TRACE", "CONNECT" ]
     }
   ]
 }
