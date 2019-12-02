@@ -4,6 +4,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Mystique.Core.Mvc.Infrastructure;
+using Ocelot.DependencyInjection;
+using Ocelot.Middleware;
 
 namespace Mystique
 {
@@ -25,6 +27,7 @@ namespace Mystique
                 client.BaseAddress = new System.Uri(Configuration.GetSection("Kestrel:Endpoints:Http:Url").Get<string>().Replace("*", "127.0.0.1"));
             });
             services.AddHttpClient("http-client");
+            services.AddOcelot();
             services.AddHostedService<Services.DownloadPluginsBackgroundService>();
         }
 
@@ -42,6 +45,8 @@ namespace Mystique
             app.UseStaticFiles();
 
             app.MystiqueRoute(lifetime);
+
+            app.UseOcelot().Wait();
         }
     }
 }

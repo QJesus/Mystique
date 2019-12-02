@@ -1,0 +1,16 @@
+{
+  "ReRoutes": [
+    {
+      "DownstreamPathTemplate": "/{url}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        {
+          "Host": "127.0.0.1",
+          "Port": 59198
+        }
+      ],
+      "UpstreamPathTemplate": "/Miao.Web/{url}",
+      "UpstreamHttpMethod": []
+    }
+  ]
+}
