@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Mystique.Core.Interfaces;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 
 namespace Mystique.Core.Contracts
@@ -20,53 +21,39 @@ namespace Mystique.Core.Contracts
         {
             var references = assembly.GetReferencedAssemblies();
 
-            foreach (var item in references)
+            foreach (var item in references.Where(x => !SharedFrameworkConst.SharedFrameworkDLLs.Contains($"{x.Name}.dll")))
             {
                 var name = item.Name;
-
                 var version = item.Version.ToString();
-
                 var stream = referenceContainer.GetStream(name, version);
-
                 if (stream != null)
                 {
                     logger.LogDebug($"Found the cached reference '{name}' v.{version}");
                     context.LoadFromStream(stream);
+                    continue;
                 }
-                else
+
+                var filePath = Path.Combine(moduleFolder, $"{name}.dll");
+                if (!File.Exists(filePath))
                 {
-                    if (IsSharedFreamwork(name))
-                    {
-                        continue;
-                    }
+                    logger.LogWarning($"The package '{name}.dll' is missing. {filePath} not exist");
+                    continue;
+                }
 
-                    var dllName = $"{name}.dll";
-                    var filePath = $"{moduleFolder}\\{dllName}";
+                using (var fs = new FileStream(filePath, FileMode.Open))
+                {
+                    var referenceAssembly = context.LoadFromStream(fs);
+                    var memoryStream = new MemoryStream();
 
-                    if (!File.Exists(filePath))
-                    {
-                        logger.LogWarning($"The package '{dllName}' is missing.");
-                        continue;
-                    }
+                    fs.Position = 0;
+                    fs.CopyTo(memoryStream);
+                    fs.Position = 0;
+                    memoryStream.Position = 0;
+                    referenceContainer.SaveStream(name, version, memoryStream);
 
-                    using (var fs = new FileStream(filePath, FileMode.Open))
-                    {
-                        var referenceAssembly = context.LoadFromStream(fs);
-
-                        var memoryStream = new MemoryStream();
-
-                        fs.Position = 0;
-                        fs.CopyTo(memoryStream);
-                        fs.Position = 0;
-                        memoryStream.Position = 0;
-                        referenceContainer.SaveStream(name, version, memoryStream);
-
-                        LoadStreamsIntoContext(context, moduleFolder, referenceAssembly);
-                    }
+                    LoadStreamsIntoContext(context, moduleFolder, referenceAssembly);
                 }
             }
         }
-
-        private bool IsSharedFreamwork(string name) => SharedFrameworkConst.SharedFrameworkDLLs.Contains($"{name}.dll");
     }
 }

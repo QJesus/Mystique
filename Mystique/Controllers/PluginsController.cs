@@ -46,6 +46,7 @@ namespace Mystique.Controllers
         public IActionResult Add() => View();
 
         [HttpPost("Upload")]
+        [DisableRequestSizeLimit]
         public async Task<IActionResult> UploadAsync()
         {
             using var stream = Request.GetPluginStream();
