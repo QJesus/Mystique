@@ -1,47 +1,77 @@
 #!/bin/bash
 
-if [ ! -d "/opt/smt/eusb_terminal/" ]; then
-    mkdir -p /opt/smt/eusb_terminal/
-    echo "mkdir /opt/smt/eusb_terminal/"
+# source=$(cd `dirname $0`; pwd)/$program
+source=$(cd `dirname $0`; pwd)/$program
+target=/opt/smt/eusb_terminal
+program=Mystique
+listen_port=12580
+export_firewall=true
+random_port=false
+ip=127.0.0.1
+
+if [ $export_firewall == "true" ]; then
+    ip=*
 fi
 
-if [ ! -d "$(cd `dirname $0`; pwd)/Mystique" ]; then
-    echo "error. $(cd `dirname $0`; pwd)/Mystique not found"
+if [ $random_port == "true" ]; then
+    ip=127.0.0.1
+    first_port=29175
+    last_port=59172
+    for ((port = $first_port; port <= $last_port; port++)); do
+        (echo >/dev/tcp/$ip/$port) >/dev/null 2>&1 && continue || break
+    done
+    echo $port
+    listen_port=$port
+fi
+
+if [ ! -d $target ]; then
+    echo "mkdir -p $target"
+    mkdir -p $target
+fi
+
+if [ ! -d $source ]; then
+    echo "error. $source not found"
 else
-    firewall-cmd --zone=public --remove-port=12580/tcp --permanent
+    echo "--remove-port=$listen_port/tcp"
+    firewall-cmd --zone=public --remove-port=$listen_port/tcp --permanent
+
+    echo "stop $program"
     systemctl daemon-reload
-    systemctl stop Mystique.service
-    systemctl disable Mystique.service
+    systemctl stop $program.service
+    systemctl disable $program.service
 
     echo "[Unit]
-Description=Mystique
+Description=$program
 
 [Service]
-WorkingDirectory=/opt/smt/eusb_terminal/Mystique
-ExecStart=/opt/smt/eusb_terminal/Mystique/Mystique --urls=http://*:12580
+WorkingDirectory=$target/$program
+ExecStart=$target/$program/$program --urls=http://$ip:$listen_port
 Restart=always
 RestartSec=12
 KillSignal=SIGINT
 StandardOutput=syslog
 StandardError=syslog
-SyslogIdentifier=Mystique
+SyslogIdentifier=$program
 User=root
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=DOTNET_PRINT_TELEMETRY_MESSAGE=false
 
 [Install]
-WantedBy=multi-user.target" >/etc/systemd/system/Mystique.service
- 
-    cp -r $(cd `dirname $0`; pwd)/Mystique /opt/smt/eusb_terminal/
-    echo "cp -r /opt/smt/eusb_terminal/Mystique"
+WantedBy=multi-user.target" >/etc/systemd/system/$program.service
 
+    echo "cp -r $source $target"
+    cp -r $source $target
+
+    echo "start $program"
     # systemctl restart rsyslog
-    systemctl enable Mystique.service
-    systemctl start Mystique.service
+    systemctl enable $program.service
+    systemctl start $program.service
+    if [ $export_firewall == "true" ]; then
+        echo "--add-port=$listen_port/tcp"
+        firewall-cmd --zone=public --add-port=$listen_port/tcp --permanent
+    fi
+    echo "reload firewall"
+    firewall-cmd --reload
 fi
 
-firewall-cmd --zone=public --add-port=12580/tcp --permanent
-firewall-cmd --reload
-echo "export host port 12580"
-
-systemctl status Mystique.service -l
+systemctl status $program.service -l
