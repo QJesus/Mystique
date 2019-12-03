@@ -11,20 +11,18 @@
 //using System.Text.RegularExpressions;
 //using System.Threading;
 //using System.Threading.Tasks;
-//
+
 //namespace Mystique.Services
 //{
 //    public class DownloadPluginsBackgroundService : BackgroundService
 //    {
 //        private readonly IServiceScope serviceScope;
-//        private readonly IMvcPluginSetup mvcPluginSetup;
 //        private readonly FtpClient.FtpClientOption ftpClientOption;
 //        private readonly ILogger<DownloadPluginsBackgroundService> logger;
 
 //        public DownloadPluginsBackgroundService(IConfiguration configuration, IServiceScopeFactory serviceScopeFactory, ILoggerFactory loggerFactory)
 //        {
 //            serviceScope = serviceScopeFactory.CreateScope();
-//            mvcPluginSetup = serviceScope.ServiceProvider.GetRequiredService<IMvcPluginSetup>();
 //            ftpClientOption = configuration.GetSection("FtpClientOption").Get<FtpClient.FtpClientOption>();
 //            logger = loggerFactory.CreateLogger<DownloadPluginsBackgroundService>();
 //        }
@@ -61,9 +59,9 @@
 //            var cachePlugins = await mvcPluginSetup.GetPluginsAsync(all: true);
 //            var ftpPlugins = await ftpClient.GetFileDetailsAsync();
 
-//            foreach (var o in cachePlugins.Select(o => o.ZipFileName).Concat(ftpPlugins.Select(o => o.name)).Distinct())
+//            foreach (var o in cachePlugins.Select(o => o.zip).Concat(ftpPlugins.Select(o => o.name)).Distinct())
 //            {
-//                var cache = cachePlugins.FirstOrDefault(x => x.ZipFileName == o); // cache
+//                var cache = cachePlugins.FirstOrDefault(x => x.zip == o); // cache
 //                var (name, size, modified) = ftpPlugins.FirstOrDefault(x => x.name == o); // current
 //                if (!string.IsNullOrEmpty(name) && (size != cache?.Size || modified != cache?.Modified))
 //                {
@@ -80,7 +78,7 @@
 //                            await pluginPackage.InitializeAsync(stream);
 //                            pluginPackage.Configuration.Size = size;
 //                            pluginPackage.Configuration.Modified = modified;
-//                            pluginPackage.Configuration.ZipFileName = name;
+//                            pluginPackage.Configuration.zip = name;
 //                            await pluginManager.AddPluginsAsync(pluginPackage);
 //                        }
 //                        logger.LogInformation(new EventId(200, "下载并更新插件"), $"name={name},size={size},modified={modified}");
@@ -98,6 +96,8 @@
 //            using (serviceScope) { }
 //            return base.StopAsync(cancellationToken);
 //        }
+
+
 //    }
 
 //    public class FtpClient
@@ -255,5 +255,4 @@
 //            }
 //        }
 //    }
-
 //}

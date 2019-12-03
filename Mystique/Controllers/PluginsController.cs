@@ -59,15 +59,24 @@ namespace Mystique.Controllers
             archive.ExtractToDirectory(tempSitePath, true);
 
             // 2. 检查文件是否有缺失
-            if (!System.IO.File.Exists(Path.Combine(tempSitePath, $"{siteName}.dll")))
+            var depJson = Directory.EnumerateFiles(tempSitePath, "*.deps.json", SearchOption.AllDirectories).FirstOrDefault();
+            if (string.IsNullOrEmpty(depJson))
             {
-                throw new FileNotFoundException($"未从 {zipPackage.FileName} 中找到可执行程序 {siteName}.dll");
+                throw new FileNotFoundException($"未从 {zipPackage.FileName} 中找到文件 .deps.json");
+            }
+            tempSitePath = Path.GetDirectoryName(depJson); // publish 之后的项目有 deps.json 文件，其所在的目录即为项目目录
+
+            var dll = depJson.Replace("deps.json", "dll");
+            if (!System.IO.File.Exists(dll))
+            {
+                throw new FileNotFoundException($"未从 {zipPackage.FileName} 中找到可执行程序");
             }
             if (!System.IO.File.Exists(Path.Combine(tempSitePath, "appsettings.json")))
             {
                 throw new FileNotFoundException($"未从 {zipPackage.FileName} 中找到配置文件 appsettings.json");
             }
 
+            siteName = Path.GetFileNameWithoutExtension(dll);
             // 3. 检查配置是否有缺失
             var builder = new ConfigurationBuilder()
                 .SetBasePath(tempSitePath)
