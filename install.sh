@@ -1,10 +1,10 @@
 #!/bin/bash
 
+program=Mystique
+listen_port=12580
 # source=$(cd `dirname $0`; pwd)/$program
 source=$(cd `dirname $0`; pwd)/$program
 target=/opt/smt/eusb_terminal
-program=Mystique
-listen_port=12580
 export_firewall=true
 random_port=false
 ip=127.0.0.1
@@ -61,6 +61,7 @@ WantedBy=multi-user.target" >/etc/systemd/system/$program.service
 
     echo "cp -r $source $target"
     cp -r $source $target
+    chmod +x $target/$program/$program
 
     echo "start $program"
     # systemctl restart rsyslog
