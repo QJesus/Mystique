@@ -25,6 +25,8 @@ namespace Mystique
                 client.BaseAddress = new System.Uri(Configuration.GetSection("Kestrel:Endpoints:Http:Url").Get<string>().Replace("*", "127.0.0.1"));
             });
             services.AddOcelot();
+            services.AddMemoryCache();
+            services.AddSingleton<PluginManager>();
             // services.AddHostedService<Services.DownloadPluginsBackgroundService>();
         }
 

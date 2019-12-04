@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -9,18 +10,20 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Text;
 
 namespace Mystique.Controllers
 {
     public class PluginsController : Controller
     {
-        private static readonly object lock_obj = new object();
 
         private readonly IWebHostEnvironment webHostEnvironment;
+        private readonly PluginManager pluginManager;
 
-        public PluginsController(IWebHostEnvironment webHostEnvironment)
+        public PluginsController(IWebHostEnvironment webHostEnvironment, PluginManager pluginManager)
         {
             this.webHostEnvironment = webHostEnvironment;
+            this.pluginManager = pluginManager;
         }
 
         [HttpGet]
@@ -135,41 +138,6 @@ namespace Mystique.Controllers
             System.IO.File.WriteAllText(pIdPath, process.Id.ToString(), System.Text.Encoding.UTF8);
 
             // 6. 更新 API 网关
-            lock (lock_obj)
-            {
-                var modified = false;
-                var ocelot = Path.Combine(webHostEnvironment.ContentRootPath, "ocelot.json");
-                var oro = JObject.Parse(System.IO.File.ReadAllText(ocelot)).ToObject<OcelotRootObject>();
-                var route = oro.ReRoutes.FirstOrDefault(f => f.UpstreamPathTemplate == $"/{siteName}/{{url}}");
-                if (route == null)
-                {
-                    oro.ReRoutes.Add(route = new ReRoute
-                    {
-                        DownstreamPathTemplate = "/{url}",
-                        DownstreamScheme = "http",
-                        UpstreamHttpMethod = new List<string> { "GET", "HEAD", "POST", "OPTIONS", "PUT", "DELETE", "TRACE", "CONNECT", },
-                        UpstreamPathTemplate = $"/{siteName}/{{url}}"
-                    });
-                    modified = true;
-                }
-                route.DownstreamHostAndPorts ??= new List<Downstreamhostandport>();
-
-                var dhap = route.DownstreamHostAndPorts.FirstOrDefault(x => x.Port == uri.Port);
-                if (dhap == null)
-                {
-                    route.DownstreamHostAndPorts.Add(new Downstreamhostandport
-                    {
-                        Host = "127.0.0.1",
-                        Port = uri.Port,
-                    });
-                    modified = true;
-                }
-
-                if (modified)
-                {
-                    System.IO.File.WriteAllText(ocelot, JsonConvert.SerializeObject(oro, Formatting.Indented));
-                }
-            }
 
             return RedirectToAction("Index");
         }
@@ -193,24 +161,106 @@ namespace Mystique.Controllers
             return RedirectToAction("Index");
         }
     }
+
 }
 
-public class OcelotRootObject
+namespace Mystique
 {
-    public List<ReRoute> ReRoutes { get; set; }
-}
+    public class OcelotRootObject
+    {
+        public List<ReRoute> ReRoutes { get; set; }
+    }
 
-public class ReRoute
-{
-    public string DownstreamPathTemplate { get; set; }
-    public string DownstreamScheme { get; set; }
-    public List<Downstreamhostandport> DownstreamHostAndPorts { get; set; }
-    public string UpstreamPathTemplate { get; set; }
-    public List<string> UpstreamHttpMethod { get; set; }
-}
+    public class ReRoute
+    {
+        public string DownstreamPathTemplate { get; set; }
+        public string DownstreamScheme { get; set; }
+        public List<Downstreamhostandport> DownstreamHostAndPorts { get; set; }
+        public string UpstreamPathTemplate { get; set; }
+        public List<string> UpstreamHttpMethod { get; set; }
+    }
 
-public class Downstreamhostandport
-{
-    public string Host { get; set; }
-    public int Port { get; set; }
+    public class Downstreamhostandport
+    {
+        public string Host { get; set; }
+        public int Port { get; set; }
+    }
+
+    public class PluginManager
+    {
+        private static readonly object lock_obj = new object();
+
+        private readonly IConfiguration configuration;
+        private readonly IWebHostEnvironment webHostEnvironment;
+        private readonly IMemoryCache memoryCache;
+
+        public PluginManager(IConfiguration configuration, IWebHostEnvironment webHostEnvironment, IMemoryCache memoryCache)
+        {
+            this.configuration = configuration;
+            this.webHostEnvironment = webHostEnvironment;
+            this.memoryCache = memoryCache;
+        }
+
+        public void AddPlugin(Stream zipStream, string siteName)
+        {
+        }
+
+        /// <summary>
+        ///     解压到临时目录
+        /// </summary>
+        private string Extract(Stream zipStream, string siteName)
+        {
+            var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
+            zipStream.Position = 0;
+            var tempPath = Path.Combine(webHostEnvironment.ContentRootPath, "host_plugins", $"{siteName}_{DateTime.Now.Ticks}");
+            archive.ExtractToDirectory(tempPath, true);
+            return tempPath;
+        }
+
+        private void UpdateGateway(string siteName, int port)
+        {
+            lock (lock_obj)
+            {
+                var modified = false;
+                var ocelot = Path.Combine(webHostEnvironment.ContentRootPath, "ocelot.json");
+                var oro = JObject.Parse(File.Exists(ocelot) ? File.ReadAllText(ocelot, Encoding.UTF8) : "{}").ToObject<OcelotRootObject>();
+                var route = oro.ReRoutes.FirstOrDefault(f => f.UpstreamPathTemplate == $"/{siteName}/{{url}}");
+                if (route == null)
+                {
+                    oro.ReRoutes.Add(route = new ReRoute
+                    {
+                        DownstreamPathTemplate = "/{url}",
+                        DownstreamScheme = "http",
+                        UpstreamHttpMethod = new List<string> { "GET", "HEAD", "POST", "OPTIONS", "PUT", "DELETE", "TRACE", "CONNECT", },
+                        UpstreamPathTemplate = $"/{siteName}/{{url}}"
+                    });
+                    modified = true;
+                }
+                route.DownstreamHostAndPorts ??= new List<Downstreamhostandport>();
+
+                var dhap = route.DownstreamHostAndPorts.FirstOrDefault(x => x.Port == port);
+                if (dhap == null)
+                {
+                    route.DownstreamHostAndPorts.Add(new Downstreamhostandport
+                    {
+                        Host = "127.0.0.1",
+                        Port = port,
+                    });
+                    modified = true;
+                }
+
+                if (modified)
+                {
+                    File.WriteAllText(ocelot, JsonConvert.SerializeObject(oro, Formatting.Indented), Encoding.UTF8);
+                }
+            }
+        }
+    }
+
+    public class PluginInfo
+    {
+        public string Name { get; set; }
+        public int Port { get; set; }
+        public string Version { get; set; }
+    }
 }
