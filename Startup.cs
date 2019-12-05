@@ -2,8 +2,10 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Ocelot.DependencyInjection;
 using Ocelot.Middleware;
+using System.IO;
 
 namespace Mystique
 {
@@ -30,8 +32,18 @@ namespace Mystique
             // services.AddHostedService<Services.DownloadPluginsBackgroundService>();
         }
 
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, IHostApplicationLifetime lifetime, PluginManager pluginManager)
         {
+            lifetime.ApplicationStarted.Register(() =>
+            {
+                foreach (var zip in Directory.EnumerateFiles(Path.Combine(env.ContentRootPath, "zips"), "*.zip", SearchOption.TopDirectoryOnly))
+                {
+                    using var zipStream = File.OpenRead(zip);
+                    var siteName = Path.GetFileNameWithoutExtension(zip);
+                    pluginManager.AddPlugin(zipStream, siteName, "20191205");
+                }
+            });
+
             app.UseDeveloperExceptionPage();
             app.UseStaticFiles();
             app.UseRouting();

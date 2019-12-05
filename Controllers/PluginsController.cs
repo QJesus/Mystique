@@ -52,92 +52,96 @@ namespace Mystique.Controllers
             }
 
             using var zipStream = zipPackage.OpenReadStream();
-            var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
-            zipStream.Position = 0;
-
             var siteName = Path.GetFileNameWithoutExtension(zipPackage.FileName);
+            pluginManager.AddPlugin(zipStream, siteName, "20191205");
 
-            // 1. 解压到临时文件夹
-            var tempSitePath = Path.Combine(webHostEnvironment.ContentRootPath, "host_plugins", $"{siteName}_{DateTime.Now.Ticks}");
-            archive.ExtractToDirectory(tempSitePath, true);
+            //
+            //var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
+            //zipStream.Position = 0;
 
-            // 2. 检查文件是否有缺失
-            var depJson = Directory.EnumerateFiles(tempSitePath, "*.deps.json", SearchOption.AllDirectories).FirstOrDefault();
-            if (string.IsNullOrEmpty(depJson))
-            {
-                throw new FileNotFoundException($"未从 {zipPackage.FileName} 中找到文件 .deps.json");
-            }
-            tempSitePath = Path.GetDirectoryName(depJson); // publish 之后的项目有 deps.json 文件，其所在的目录即为项目目录
+            //
 
-            var dll = depJson.Replace("deps.json", "dll");
-            if (!System.IO.File.Exists(dll))
-            {
-                throw new FileNotFoundException($"未从 {zipPackage.FileName} 中找到可执行程序");
-            }
-            if (!System.IO.File.Exists(Path.Combine(tempSitePath, "appsettings.json")))
-            {
-                throw new FileNotFoundException($"未从 {zipPackage.FileName} 中找到配置文件 appsettings.json");
-            }
+            //// 1. 解压到临时文件夹
+            //var tempSitePath = Path.Combine(webHostEnvironment.ContentRootPath, "host_plugins", $"{siteName}_{DateTime.Now.Ticks}");
+            //archive.ExtractToDirectory(tempSitePath, true);
 
-            siteName = Path.GetFileNameWithoutExtension(dll);
-            // 3. 检查配置是否有缺失
-            var builder = new ConfigurationBuilder()
-                .SetBasePath(tempSitePath)
-                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false);
-            var configuration = builder.Build();
-            var kestrel = configuration.GetSection("Kestrel:Endpoints:Http:Url").Get<string>().Replace("*", "127.0.0.1");
-            if (!Uri.TryCreate(kestrel, UriKind.RelativeOrAbsolute, out var uri))
-            {
-                throw new ArgumentException($"{zipPackage.FileName} 未在 appsettings.json 中指定端口号。节点 Kestrel:Endpoints:Http:Url");
-            }
+            //// 2. 检查文件是否有缺失
+            //var depJson = Directory.EnumerateFiles(tempSitePath, "*.deps.json", SearchOption.AllDirectories).FirstOrDefault();
+            //if (string.IsNullOrEmpty(depJson))
+            //{
+            //    throw new FileNotFoundException($"未从 {zipPackage.FileName} 中找到文件 .deps.json");
+            //}
+            //tempSitePath = Path.GetDirectoryName(depJson); // publish 之后的项目有 deps.json 文件，其所在的目录即为项目目录
 
-            // 3. 结束旧站点
-            var sitePath = Path.Combine(webHostEnvironment.ContentRootPath, "host_plugins", siteName);
-            var pIdPath = Path.Combine(webHostEnvironment.ContentRootPath, "host_pids", $"{siteName}.{uri.Port}");
-            if (!Directory.Exists(Path.GetDirectoryName(pIdPath)))
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(pIdPath));
-            }
-            var pIdStr = (System.IO.File.Exists(pIdPath) ? System.IO.File.ReadAllText(pIdPath, System.Text.Encoding.UTF8) : string.Empty).Trim();
-            if (int.TryParse(pIdStr, out var pId))
-            {
-                try
-                {
-                    var ps = Process.GetProcessById(pId);
-                    if (ps?.HasExited == false)
-                    {
-                        ps.Kill();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex);
-                }
-            }
+            //var dll = depJson.Replace("deps.json", "dll");
+            //if (!System.IO.File.Exists(dll))
+            //{
+            //    throw new FileNotFoundException($"未从 {zipPackage.FileName} 中找到可执行程序");
+            //}
+            //if (!System.IO.File.Exists(Path.Combine(tempSitePath, "appsettings.json")))
+            //{
+            //    throw new FileNotFoundException($"未从 {zipPackage.FileName} 中找到配置文件 appsettings.json");
+            //}
 
-            // 4. 覆盖文件
-            if (Directory.Exists(sitePath))
-            {
-                Directory.Delete(sitePath, true);
-            }
-            Directory.Move(tempSitePath, sitePath);
+            //siteName = Path.GetFileNameWithoutExtension(dll);
+            //// 3. 检查配置是否有缺失
+            //var builder = new ConfigurationBuilder()
+            //    .SetBasePath(tempSitePath)
+            //    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false);
+            //var configuration = builder.Build();
+            //var kestrel = configuration.GetSection("Kestrel:Endpoints:Http:Url").Get<string>().Replace("*", "127.0.0.1");
+            //if (!Uri.TryCreate(kestrel, UriKind.RelativeOrAbsolute, out var uri))
+            //{
+            //    throw new ArgumentException($"{zipPackage.FileName} 未在 appsettings.json 中指定端口号。节点 Kestrel:Endpoints:Http:Url");
+            //}
 
-            // 5. 启动新站点 
-            Process process = new Process();
-            process.StartInfo.WorkingDirectory = sitePath;
-            process.StartInfo.FileName = "dotnet";
-            process.StartInfo.Arguments = $"{siteName}.dll";
-            process.StartInfo.CreateNoWindow = true;
-            process.StartInfo.ErrorDialog = true;
-            process.StartInfo.UseShellExecute = true;
-            //process.StartInfo.RedirectStandardError = true;
-            //process.StartInfo.RedirectStandardInput = true;
-            //process.StartInfo.RedirectStandardOutput = true;
-            process.Start();
+            //// 3. 结束旧站点
+            //var sitePath = Path.Combine(webHostEnvironment.ContentRootPath, "host_plugins", siteName);
+            //var pIdPath = Path.Combine(webHostEnvironment.ContentRootPath, "host_pids", $"{siteName}.{uri.Port}");
+            //if (!Directory.Exists(Path.GetDirectoryName(pIdPath)))
+            //{
+            //    Directory.CreateDirectory(Path.GetDirectoryName(pIdPath));
+            //}
+            //var pIdStr = (System.IO.File.Exists(pIdPath) ? System.IO.File.ReadAllText(pIdPath, System.Text.Encoding.UTF8) : string.Empty).Trim();
+            //if (int.TryParse(pIdStr, out var pId))
+            //{
+            //    try
+            //    {
+            //        var ps = Process.GetProcessById(pId);
+            //        if (ps?.HasExited == false)
+            //        {
+            //            ps.Kill();
+            //        }
+            //    }
+            //    catch (Exception ex)
+            //    {
+            //        Console.WriteLine(ex);
+            //    }
+            //}
 
-            System.IO.File.WriteAllText(pIdPath, process.Id.ToString(), System.Text.Encoding.UTF8);
+            //// 4. 覆盖文件
+            //if (Directory.Exists(sitePath))
+            //{
+            //    Directory.Delete(sitePath, true);
+            //}
+            //Directory.Move(tempSitePath, sitePath);
 
-            // 6. 更新 API 网关
+            //// 5. 启动新站点 
+            //Process process = new Process();
+            //process.StartInfo.WorkingDirectory = sitePath;
+            //process.StartInfo.FileName = "dotnet";
+            //process.StartInfo.Arguments = $"{siteName}.dll";
+            //process.StartInfo.CreateNoWindow = true;
+            //process.StartInfo.ErrorDialog = true;
+            //process.StartInfo.UseShellExecute = true;
+            ////process.StartInfo.RedirectStandardError = true;
+            ////process.StartInfo.RedirectStandardInput = true;
+            ////process.StartInfo.RedirectStandardOutput = true;
+            //process.Start();
+
+            //System.IO.File.WriteAllText(pIdPath, process.Id.ToString(), System.Text.Encoding.UTF8);
+
+            //// 6. 更新 API 网关
 
             return RedirectToAction("Index");
         }
@@ -201,8 +205,12 @@ namespace Mystique
             this.memoryCache = memoryCache;
         }
 
-        public void AddPlugin(Stream zipStream, string siteName)
+        public void AddPlugin(Stream zipStream, string siteName, string version)
         {
+            var path = Extract(zipStream, siteName);
+            Install(path, siteName, version);
+            var portStr = File.ReadAllText(Path.Combine(webHostEnvironment.ContentRootPath, "pids", siteName));
+            UpdateGateway(siteName, int.Parse(portStr));
         }
 
         /// <summary>
@@ -215,6 +223,32 @@ namespace Mystique
             var tempPath = Path.Combine(webHostEnvironment.ContentRootPath, "host_plugins", $"{siteName}_{DateTime.Now.Ticks}");
             archive.ExtractToDirectory(tempPath, true);
             return tempPath;
+        }
+
+        private void Install(string path, string siteName, string version)
+        {
+            var dll = Directory.EnumerateFiles(path, "*.dll", SearchOption.AllDirectories).FirstOrDefault();
+            if (dll == null)
+            {
+                throw new FileNotFoundException("未找到可执行程序 *.dll");
+            }
+
+            File.Copy("plugin_sevice.sh", Path.Combine(Path.GetDirectoryName(dll), "plugin_sevice.sh"));
+
+            var source = Path.GetDirectoryName(dll);
+            var folder = new DirectoryInfo(source).Name;
+            Process process = new Process();
+            process.StartInfo.WorkingDirectory = webHostEnvironment.ContentRootPath;
+            process.StartInfo.FileName = "bash";
+            process.StartInfo.Arguments = $"plugin_sevice.sh add {siteName} {version} {source} {folder}";
+            process.StartInfo.CreateNoWindow = true;
+            process.StartInfo.ErrorDialog = true;
+            process.StartInfo.UseShellExecute = true;
+            //process.StartInfo.RedirectStandardError = true;
+            //process.StartInfo.RedirectStandardInput = true;
+            //process.StartInfo.RedirectStandardOutput = true;
+            process.Start();
+            process.WaitForExit();
         }
 
         private void UpdateGateway(string siteName, int port)

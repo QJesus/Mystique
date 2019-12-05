@@ -3,9 +3,22 @@
 mode=$1
 program=$2
 version=$3
-folder=$4
+source=$4
+folder=$5
 
 service_name=$program.$version.service
+
+pids=$(cd `dirname $0`; pwd)/pids;
+if [ ! -d $pids ]; then
+    echo "mkdir -p $pids"
+    mkdir -p $pids
+fi
+
+target=/opt/smt/eusb_terminal
+if [ ! -d $target ]; then
+    echo "mkdir -p $target"
+    mkdir -p $target
+fi
 
 if [ $mode == "enable" ]; then
     systemctl unmask $service_name
@@ -24,12 +37,11 @@ elif [ $mode == "remove" ]; then
     rm /etc/systemd/system/$service_name
 elif [ $mode == "add" ]; then
 
-    listen_port={port}
-    # source=$(cd `dirname $0`; pwd)/$folder
-    source=$(cd `dirname $0`; pwd)/$folder
-    target=/opt/smt/eusb_terminal
+    chmod +x $source/$program
+    
+    echo "generate a listen port for current site:"
     random_port=true
-
+    listen_port={port}
     if [ $random_port == "true" ]; then
         ip=127.0.0.1
         first_port=29175
@@ -37,29 +49,23 @@ elif [ $mode == "add" ]; then
         for ((port = $first_port; port <= $last_port; port++)); do
             (echo >/dev/tcp/$ip/$port) >/dev/null 2>&1 && continue || break
         done
-        echo $port=-
         listen_port=$port
     fi
+    echo $listen_port >$pids/$program
+    echo "listen_port=$listen_port"
 
-    if [ ! -d $target ]; then
-        echo "mkdir -p $target"
-        mkdir -p $target
-    fi
+    echo "stop old site service: $service_name"
+    systemctl daemon-reload
+    systemctl stop $service_name
+    systemctl disable $service_name
 
-    if [ ! -d $source ]; then
-        echo "error. $source not found"
-    else
-        echo "stop $service_name"
-        systemctl daemon-reload
-        systemctl stop $service_name
-        systemctl disable $service_name
-
-        echo "[Unit]
+    echo "update site. $source to $target"
+    echo "[Unit]
 Description=$program
 
 [Service]
 WorkingDirectory=$target/$folder
-ExecStart=/home/pi/dotnet/dotnet $target/$folder/$program.dll --urls=http://127.0.0.1:$listen_port
+ExecStart=$target/$folder/$program --urls=http://127.0.0.1:$listen_port
 Restart=always
 RestartSec=12
 KillSignal=SIGINT
@@ -72,34 +78,17 @@ Environment=DOTNET_PRINT_TELEMETRY_MESSAGE=false
 
 [Install]
 WantedBy=multi-user.target" >/etc/systemd/system/$service_name
+    cp -r $source $target
 
-        echo "cp -r $source $target"
-        cp -r $source $target
-
-        echo "start $program"
-        systemctl enable $service_name
-        systemctl start $service_name
-    fi
-
-    if [ ! -d $target/pids ]; then
-        echo "mkdir -p $target/pids"
-        mkdir -p $target/pids
-    fi
-
-    echo $listen_port >$target/pids/$program
-
+    echo "start new site: $program"
+    systemctl enable $service_name
+    systemctl start $service_name
 else
     echo "invalid $mode. enable, disable, remove, add"
 fi
 
-sleep 1
+sleep 1.2
 
 systemctl status $service_name -l
 
 netstat -tlpn
-
-# example: 
-# sudo ./y.sh add Miao.Web 20191204 miao.web.self-contained
-# sudo ./y.sh disable Miao.Web 20191204
-# sudo ./y.sh enable Miao.Web 20191204
-# sudo ./y.sh remove Miao.Web 20191204
