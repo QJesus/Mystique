@@ -87,8 +87,8 @@ else
     echo "invalid $mode. enable, disable, remove, add"
 fi
 
-sleep 1.2
-
 systemctl status $service_name -l
+
+sleep 1.2
 
 netstat -tlpn
