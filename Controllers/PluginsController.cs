@@ -97,12 +97,12 @@ namespace Mystique
     {
         public string DownstreamPathTemplate { get; set; }
         public string DownstreamScheme { get; set; }
-        public List<Downstreamhostandport> DownstreamHostAndPorts { get; set; }
+        public List<DownstreamHostAndPort> DownstreamHostAndPorts { get; set; }
         public string UpstreamPathTemplate { get; set; }
         public List<string> UpstreamHttpMethod { get; set; }
     }
 
-    public class Downstreamhostandport
+    public class DownstreamHostAndPort
     {
         public string Host { get; set; }
         public int Port { get; set; }
@@ -259,14 +259,14 @@ namespace Mystique
                     });
                     modified = true;
                 }
-                route.DownstreamHostAndPorts ??= new List<Downstreamhostandport>();
+                route.DownstreamHostAndPorts ??= new List<DownstreamHostAndPort>();
 
                 // 一个站点只有一个路由
                 var dhap = route.DownstreamHostAndPorts.FirstOrDefault(x => x.Port == port);
                 if (dhap == null)
                 {
                     route.DownstreamHostAndPorts.Clear();
-                    route.DownstreamHostAndPorts.Add(new Downstreamhostandport
+                    route.DownstreamHostAndPorts.Add(new DownstreamHostAndPort
                     {
                         Host = "127.0.0.1",
                         Port = port,
