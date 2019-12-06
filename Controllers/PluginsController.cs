@@ -28,6 +28,14 @@ namespace Mystique.Controllers
             this.pluginManager = pluginManager;
         }
 
+        [HttpGet("plugins/details")]
+        public IActionResult Get()
+        {
+            var ps = pluginManager.PluginInfos;
+            return Json(ps);
+        }
+
+
         [HttpGet("Index")]
         public IActionResult Index()
         {
@@ -104,6 +112,8 @@ namespace Mystique
     {
         private static readonly object lock_obj = new object();
 
+        private const string sh_name = "plugin_service.sh";
+
         private readonly IConfiguration configuration;
         private readonly IWebHostEnvironment webHostEnvironment;
         private readonly IMemoryCache memoryCache;
@@ -153,7 +163,7 @@ namespace Mystique
             var siteName = match.Groups[1].Value;
             var version = match.Groups[2].Value;
             var path = Extract(zipStream, siteName);
-            Install(path, siteName, version);
+            var target = Install(path, siteName, version);
             var portStr = File.ReadAllText(Path.Combine(webHostEnvironment.ContentRootPath, "pids", siteName));
             UpdateGateway(siteName, int.Parse(portStr));
 
@@ -163,6 +173,7 @@ namespace Mystique
                 Port = int.Parse(portStr),
                 Version = version,
                 State = "updated",
+                Path = target,
             });
 
             if (autoRun)
@@ -183,7 +194,7 @@ namespace Mystique
             return tempPath;
         }
 
-        private void Install(string path, string siteName, string version)
+        private string Install(string path, string siteName, string version)
         {
             var dll = Directory.EnumerateFiles(path, "*.dll", SearchOption.AllDirectories).FirstOrDefault();
             if (dll == null)
@@ -191,7 +202,7 @@ namespace Mystique
                 throw new FileNotFoundException("未找到可执行程序 *.dll");
             }
 
-            File.Copy("plugin_service.sh", Path.Combine(Path.GetDirectoryName(dll), "plugin_service.sh"));
+            File.Copy(sh_name, Path.Combine(Path.GetDirectoryName(dll), sh_name));
 
             var source = Path.GetDirectoryName(dll);
             var folder = new DirectoryInfo(source).Name;
@@ -201,10 +212,16 @@ namespace Mystique
             {
                 Directory.Delete(path, true);
             }
-            catch
-            {
+            catch { }
 
-            }
+            var target = File.ReadAllLines(Path.Combine(Path.GetDirectoryName(dll), sh_name), Encoding.UTF8)
+                .Select(x =>
+                {
+                    var match = Regex.Match(x, @"target=([\S]+)");
+                    return match.Groups[1].Value;
+                })
+                .FirstOrDefault();
+            return Path.Combine(string.IsNullOrEmpty(target) ? "/opt/smt/eusb_terminal" : target, siteName);
         }
 
         private void ExecutePluginSevice(params string[] arguments)
@@ -212,7 +229,7 @@ namespace Mystique
             Process process = new Process();
             process.StartInfo.WorkingDirectory = webHostEnvironment.ContentRootPath;
             process.StartInfo.FileName = "bash";
-            process.StartInfo.Arguments = $"plugin_service.sh {string.Join(" ", arguments)}";
+            process.StartInfo.Arguments = $"{sh_name} {string.Join(" ", arguments)}";
             process.StartInfo.CreateNoWindow = true;
             process.StartInfo.ErrorDialog = true;
             process.StartInfo.UseShellExecute = true;
@@ -298,5 +315,6 @@ namespace Mystique
         ///     running, stoped, updated, deleted
         /// </summary>
         public string State { get; set; }
+        public string Path { get; set; }
     }
 }

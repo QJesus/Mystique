@@ -34,7 +34,7 @@ namespace Mystique
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env, IHostApplicationLifetime lifetime, PluginManager pluginManager)
         {
-#if DEBUG
+#if FALSE
             lifetime.ApplicationStarted.Register(() =>
             {
                 var dir = Path.Combine(env.ContentRootPath, "zips");
