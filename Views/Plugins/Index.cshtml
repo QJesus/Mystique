@@ -1,4 +1,4 @@
-﻿@model List<dynamic>
+﻿@model PluginInfo[]
 @{
     ViewData["Title"] = "Index";
 }
@@ -10,32 +10,36 @@
 <table class="table table-bordered">
     <thead>
         <tr>
-            <th>Version</th>
             <th>Name</th>
-            <th>DisplayName</th>
-            <th></th>
+            <th>Version</th>
+            <th>Port</th>
+            <th>State</th>
+            <th>Control</th>
         </tr>
     </thead>
     <tbody>
-        @if (Model != null && Model.Count > 0)
+        @if (Model?.Length > 0)
         {
             foreach (var row in Model)
             {
                 <tr>
                     <td>@row.Name</td>
                     <td>@row.Version</td>
-                    <td>@row.DisplayName</td>
+                    <td>@row.Port</td>>
+                    <td>@row.State</td>
                     <td>
-                        @if (row.IsEnabled)
+                        @if (row.State == "running")
                         {
-                            <button type="button" class="btn-danger" onclick="window.location = '@Url.Action("Disable","Plugins", new { name = row.Name })';">Disable</button>
+                            <button type="button" class="btn-danger" onclick="window.location = '@Url.Action("Disable","Plugins", new { name = row.Name, version = row.Version })';">禁用</button>
                         }
-                        else
+                        else if (row.State != "deleted")
                         {
-                            <button type="button" class="btn-primary" onclick="window.location = '@Url.Action("Enable","Plugins", new { name = row.Name })';">Enable</button>
+                            <button type="button" class="btn-primary" onclick="window.location = '@Url.Action("Enable","Plugins", new { name = row.Name, version = row.Version })';">启用</button>
                         }
-
-                        <button type="button" class="btn-danger" onclick="window.location = '@Url.Action("Delete","Plugins", new { name = row.Name })';">Delete</button>
+                        @if (row.State != "deleted")
+                        {
+                            <button type="button" class="btn-danger" onclick="window.location = '@Url.Action("Delete","Plugins", new { name = row.Name, version = row.Version })';">删除</button>
+                        }
                     </td>
                 </tr>
             }

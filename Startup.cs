@@ -34,16 +34,25 @@ namespace Mystique
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env, IHostApplicationLifetime lifetime, PluginManager pluginManager)
         {
+#if DEBUG
             lifetime.ApplicationStarted.Register(() =>
             {
-                foreach (var zip in Directory.EnumerateFiles(Path.Combine(env.ContentRootPath, "zips"), "*.zip", SearchOption.TopDirectoryOnly))
+                var dir = Path.Combine(env.ContentRootPath, "zips");
+                if (!Directory.Exists(dir))
                 {
-                    using var zipStream = File.OpenRead(zip);
-                    var siteName = Path.GetFileNameWithoutExtension(zip);
-                    pluginManager.AddPlugin(zipStream, siteName, "20191205");
+                    Directory.CreateDirectory(dir);
+                }
+
+                foreach (var zip in Directory.EnumerateFiles(dir, "*.zip", SearchOption.TopDirectoryOnly))
+                {
+                    if (pluginManager.IsValidZip(zip))
+                    {
+                        using var zipStream = File.OpenRead(zip);
+                        pluginManager.AddPlugin(zipStream, Path.GetFileName(zip), true);
+                    }
                 }
             });
-
+#endif
             app.UseDeveloperExceptionPage();
             app.UseStaticFiles();
             app.UseRouting();

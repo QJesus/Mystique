@@ -5,37 +5,34 @@ using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Mystique.Controllers
 {
     public class PluginsController : Controller
     {
-
-        private readonly IWebHostEnvironment webHostEnvironment;
+        private readonly IConfiguration configuration;
         private readonly PluginManager pluginManager;
 
-        public PluginsController(IWebHostEnvironment webHostEnvironment, PluginManager pluginManager)
+        public PluginsController(IConfiguration configuration, PluginManager pluginManager)
         {
-            this.webHostEnvironment = webHostEnvironment;
+            this.configuration = configuration;
             this.pluginManager = pluginManager;
-        }
-
-        [HttpGet]
-        public IActionResult Assemblies()
-        {
-            return View(new List<object>());
         }
 
         [HttpGet("Index")]
         public IActionResult Index()
         {
-            return View(new List<object>());
+            var ps = pluginManager.PluginInfos;
+            return View(ps);
         }
 
         [HttpGet]
@@ -52,28 +49,29 @@ namespace Mystique.Controllers
             }
 
             using var zipStream = zipPackage.OpenReadStream();
-            var siteName = Path.GetFileNameWithoutExtension(zipPackage.FileName);
-            pluginManager.AddPlugin(zipStream, siteName, "20191205");
+            pluginManager.AddPlugin(zipStream, zipPackage.FileName);
 
             return RedirectToAction("Index");
         }
 
         [HttpGet("Enable")]
-        public IActionResult Enable(string name)
+        public IActionResult Enable(string name, string version)
         {
-            // ExecuteShell(sitePath, "dotnet", $"{siteName}.dll");
+            pluginManager.EnablePlugin(name, version);
             return RedirectToAction("Index");
         }
 
         [HttpGet("Disable")]
-        public IActionResult Disable(string name)
+        public IActionResult Disable(string name, string version)
         {
+            pluginManager.DisablePlugin(name, version);
             return RedirectToAction("Index");
         }
 
         [HttpGet("Delete")]
-        public IActionResult Delete(string name)
+        public IActionResult Delete(string name, string version)
         {
+            pluginManager.DeletePlugin(name, version);
             return RedirectToAction("Index");
         }
     }
@@ -110,6 +108,26 @@ namespace Mystique
         private readonly IWebHostEnvironment webHostEnvironment;
         private readonly IMemoryCache memoryCache;
 
+        public PluginInfo[] PluginInfos
+        {
+            get
+            {
+                // https://stackoverflow.com/questions/45597057/how-to-retrieve-a-list-of-memory-cache-keys-in-asp-net-core
+                var field = typeof(MemoryCache).GetProperty("EntriesCollection", BindingFlags.NonPublic | BindingFlags.Instance);
+                var items = new List<object>();
+                if (field.GetValue(memoryCache) is ICollection collection)
+                {
+                    foreach (var item in collection)
+                    {
+                        var methodInfo = item.GetType().GetProperty("Key");
+                        var val = methodInfo.GetValue(item);
+                        items.Add(val);
+                    }
+                }
+                return items.Select(key => memoryCache.Get<PluginInfo>(key)).ToArray();
+            }
+        }
+
         public PluginManager(IConfiguration configuration, IWebHostEnvironment webHostEnvironment, IMemoryCache memoryCache)
         {
             this.configuration = configuration;
@@ -117,12 +135,40 @@ namespace Mystique
             this.memoryCache = memoryCache;
         }
 
-        public void AddPlugin(Stream zipStream, string siteName, string version)
+        public bool IsValidZip(string zip)
         {
+            var match = Regex.Match(Path.GetFileName(zip), configuration.GetSection("PluginRegularRegex").Value);
+            //  TODO 校验 zip 格式正确性
+            return match.Success;
+        }
+
+        public void AddPlugin(Stream zipStream, string zip, bool autoRun = false)
+        {
+            var match = Regex.Match(Path.GetFileName(zip), configuration.GetSection("PluginRegularRegex").Value);
+            if (!match.Success)
+            {
+                throw new ArgumentException($"{zip} 插件命名格式错误，");
+            }
+
+            var siteName = match.Groups[1].Value;
+            var version = match.Groups[2].Value;
             var path = Extract(zipStream, siteName);
             Install(path, siteName, version);
             var portStr = File.ReadAllText(Path.Combine(webHostEnvironment.ContentRootPath, "pids", siteName));
             UpdateGateway(siteName, int.Parse(portStr));
+
+            memoryCache.Set(siteName, new PluginInfo
+            {
+                Name = siteName,
+                Port = int.Parse(portStr),
+                Version = version,
+                State = "updated",
+            });
+
+            if (autoRun)
+            {
+                EnablePlugin(siteName, version);
+            }
         }
 
         /// <summary>
@@ -145,14 +191,28 @@ namespace Mystique
                 throw new FileNotFoundException("未找到可执行程序 *.dll");
             }
 
-            File.Copy("plugin_sevice.sh", Path.Combine(Path.GetDirectoryName(dll), "plugin_sevice.sh"));
+            File.Copy("plugin_service.sh", Path.Combine(Path.GetDirectoryName(dll), "plugin_service.sh"));
 
             var source = Path.GetDirectoryName(dll);
             var folder = new DirectoryInfo(source).Name;
+            ExecutePluginSevice("add", siteName, version, source, folder);
+
+            try
+            {
+                Directory.Delete(path, true);
+            }
+            catch
+            {
+
+            }
+        }
+
+        private void ExecutePluginSevice(params string[] arguments)
+        {
             Process process = new Process();
             process.StartInfo.WorkingDirectory = webHostEnvironment.ContentRootPath;
             process.StartInfo.FileName = "bash";
-            process.StartInfo.Arguments = $"plugin_sevice.sh add {siteName} {version} {source} {folder}";
+            process.StartInfo.Arguments = $"plugin_service.sh {string.Join(" ", arguments)}";
             process.StartInfo.CreateNoWindow = true;
             process.StartInfo.ErrorDialog = true;
             process.StartInfo.UseShellExecute = true;
@@ -184,9 +244,11 @@ namespace Mystique
                 }
                 route.DownstreamHostAndPorts ??= new List<Downstreamhostandport>();
 
+                // 一个站点只有一个路由
                 var dhap = route.DownstreamHostAndPorts.FirstOrDefault(x => x.Port == port);
                 if (dhap == null)
                 {
+                    route.DownstreamHostAndPorts.Clear();
                     route.DownstreamHostAndPorts.Add(new Downstreamhostandport
                     {
                         Host = "127.0.0.1",
@@ -201,6 +263,30 @@ namespace Mystique
                 }
             }
         }
+
+        public void EnablePlugin(string siteName, string version)
+        {
+            ExecutePluginSevice("enable", siteName, version);
+            var p = memoryCache.Get<PluginInfo>(siteName);
+            p.State = "running";
+            memoryCache.Set(siteName, p);
+        }
+
+        public void DisablePlugin(string siteName, string version)
+        {
+            ExecutePluginSevice("disable", siteName, version);
+            var p = memoryCache.Get<PluginInfo>(siteName);
+            p.State = "stoped";
+            memoryCache.Set(siteName, p);
+        }
+
+        public void DeletePlugin(string siteName, string version)
+        {
+            ExecutePluginSevice("remove", siteName, version);
+            var p = memoryCache.Get<PluginInfo>(siteName);
+            p.State = "deleted";
+            memoryCache.Set(siteName, p);
+        }
     }
 
     public class PluginInfo
@@ -208,5 +294,9 @@ namespace Mystique
         public string Name { get; set; }
         public int Port { get; set; }
         public string Version { get; set; }
+        /// <summary>
+        ///     running, stoped, updated, deleted
+        /// </summary>
+        public string State { get; set; }
     }
 }

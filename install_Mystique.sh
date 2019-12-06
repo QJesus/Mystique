@@ -45,14 +45,13 @@ WantedBy=multi-user.target" >/etc/systemd/system/$service_name
 
 echo "cp -r $source $target"
 cp -r $source $target
+echo "chmod +x $target/$folder/$program"
 chmod +x $target/$folder/$program
+echo "chmod +x $target/$folder/plugin_service.sh"
+chmod +x $target/$folder/plugin_service.sh
 
 echo "start $service_name"
 systemctl enable $service_name
 systemctl start $service_name
 
 systemctl status $service_name -l
-
-sleep 1.2
-
-netstat -tlpn

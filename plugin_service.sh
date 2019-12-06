@@ -37,8 +37,6 @@ elif [ $mode == "remove" ]; then
     rm /etc/systemd/system/$service_name
 elif [ $mode == "add" ]; then
 
-    chmod +x $source/$program
-    
     echo "generate a listen port for current site:"
     random_port=true
     listen_port={port}
@@ -79,10 +77,8 @@ Environment=DOTNET_PRINT_TELEMETRY_MESSAGE=false
 [Install]
 WantedBy=multi-user.target" >/etc/systemd/system/$service_name
     cp -r $source $target
-
-    echo "start new site: $program"
-    systemctl enable $service_name
-    systemctl start $service_name
+    echo "chmod +x $target/$folder/$program"
+    chmod +x $target/$folder/$program
 else
     echo "invalid $mode. enable, disable, remove, add"
 fi
