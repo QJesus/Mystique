@@ -124,17 +124,10 @@ namespace Mystique
             {
                 // https://stackoverflow.com/questions/45597057/how-to-retrieve-a-list-of-memory-cache-keys-in-asp-net-core
                 var field = typeof(MemoryCache).GetProperty("EntriesCollection", BindingFlags.NonPublic | BindingFlags.Instance);
-                var items = new List<object>();
-                if (field.GetValue(memoryCache) is ICollection collection)
-                {
-                    foreach (var item in collection)
-                    {
-                        var methodInfo = item.GetType().GetProperty("Key");
-                        var val = methodInfo.GetValue(item);
-                        items.Add(val);
-                    }
-                }
-                return items.Select(key => memoryCache.Get<PluginInfo>(key)).ToArray();
+                var v = field.GetValue(memoryCache);
+                var values = (v.GetType().GetProperty("Keys").GetValue(v) as System.Collections.ObjectModel.ReadOnlyCollection<object>)
+                    .Where(k => k is string).Select(k => memoryCache.Get<PluginInfo>(k)).ToArray();
+                return values;
             }
         }
 
@@ -147,6 +140,11 @@ namespace Mystique
 
         public bool IsValidZip(string zip)
         {
+            if (string.IsNullOrEmpty(zip?.Trim()))
+            {
+                return false;
+            }
+
             var match = Regex.Match(Path.GetFileName(zip), configuration.GetSection("PluginRegularRegex").Value);
             //  TODO 校验 zip 格式正确性
             return match.Success;
@@ -154,12 +152,12 @@ namespace Mystique
 
         public void AddPlugin(Stream zipStream, string zip, bool autoRun = false)
         {
-            var match = Regex.Match(Path.GetFileName(zip), configuration.GetSection("PluginRegularRegex").Value);
-            if (!match.Success)
+            if (!IsValidZip(zip))
             {
                 throw new ArgumentException($"{zip} 插件命名格式错误，");
             }
 
+            var match = Regex.Match(Path.GetFileName(zip), configuration.GetSection("PluginRegularRegex").Value);
             var siteName = match.Groups[1].Value;
             var version = match.Groups[2].Value;
             var path = Extract(zipStream, siteName);
