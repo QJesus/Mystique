@@ -5,7 +5,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Ocelot.DependencyInjection;
 using Ocelot.Middleware;
-using System.IO;
 
 namespace Mystique
 {
@@ -27,7 +26,7 @@ namespace Mystique
             services.AddMemoryCache();
             services.AddSingleton<PluginManager>();
             services.AddHostedService<Services.HealthCheckBackgroundService>();
-            // services.AddHostedService<Services.DownloadPluginsBackgroundService>();
+            services.AddHostedService<Services.ClientWebSocketBackgroundService>();
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env, IHostApplicationLifetime lifetime, PluginManager pluginManager)

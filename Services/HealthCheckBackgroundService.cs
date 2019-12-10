@@ -1,9 +1,7 @@
 ﻿using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
-using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,7 +24,7 @@ namespace Mystique.Services
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            timer = new System.Timers.Timer { Interval = 5 * 1000.0 };
+            timer = new System.Timers.Timer { Interval = 17 * 1000.0 };
             timer.Elapsed += async (s, e) => await HealthCheck();
             await Task.Run(() => timer.Enabled = true);
 
