@@ -72,8 +72,10 @@ namespace Mystique.Services
                         var result = await clientWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
                         if (result.Count > 0)
                         {
+                            // 格式：指令|参数|是否需要应答
+                            // 如：AddPlugin|http://192.168.1.1:8080/Miao.Web.arm64.20191211.zip|true
                             var command = Encoding.UTF8.GetString(buffer[0..result.Count]).Split(new[] { '|' });
-                            await ExecuteServerCommandAsync(command[0], command.Skip(1));
+                            await ExecuteServerCommandAsync(command[0], command[1..(command.Length - 1)], bool.TryParse(command.Last(), out var r) ? r : false);
                         }
                         await Task.Delay(500);
                     }
@@ -97,7 +99,7 @@ namespace Mystique.Services
             await clientWebSocket.SendAsync(bytes, WebSocketMessageType.Text, true, default);
         }
 
-        private async Task ExecuteServerCommandAsync(string method, IEnumerable<string> arguments)
+        private async Task ExecuteServerCommandAsync(string method, string[] arguments, bool response)
         {
             switch (method)
             {
