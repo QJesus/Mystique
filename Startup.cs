@@ -2,9 +2,11 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Ocelot.DependencyInjection;
 using Ocelot.Middleware;
+using System.IO;
 
 namespace Mystique
 {
@@ -21,7 +23,12 @@ namespace Mystique
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddMvc();
-            services.AddHttpClient("internal-client");
+            services.AddHttpClient("http-client");
+            services.AddHttpClient("plugin-client", options =>
+            {
+                var url = Configuration.GetSection("PluginBaseAddress").Get<string>();
+                options.BaseAddress = new System.Uri(url);
+            });
             services.AddOcelot();
             services.AddMemoryCache();
             services.AddSingleton<PluginManager>();
@@ -52,6 +59,7 @@ namespace Mystique
 #endif
             app.UseDeveloperExceptionPage();
             app.UseStaticFiles();
+            UseFileServer(app, Path.Combine(env.ContentRootPath, "log4net"), "/logs");
             app.UseRouting();
             app.UseEndpoints(endpoints =>
             {
@@ -60,6 +68,19 @@ namespace Mystique
                    pattern: "{controller=Home}/{action=Index}/{id?}");
             });
             app.UseOcelot().Wait();
+        }
+
+        private static void UseFileServer(IApplicationBuilder app, string folder, string url)
+        {
+            var fs = new FileServerOptions
+            {
+                FileProvider = new PhysicalFileProvider(folder),
+                RequestPath = url,
+                EnableDirectoryBrowsing = true,
+            };
+            fs.StaticFileOptions.ServeUnknownFileTypes = true;
+            fs.StaticFileOptions.DefaultContentType = "text/plain; charset=utf-8";
+            app.UseFileServer(fs);
         }
     }
 }

@@ -281,6 +281,16 @@ namespace Mystique
 
         public void EnablePlugin(string siteName, string version)
         {
+            if (string.IsNullOrEmpty(siteName))
+            {
+                throw new ArgumentException("message", nameof(siteName));
+            }
+
+            if (string.IsNullOrEmpty(version))
+            {
+                throw new ArgumentException("message", nameof(version));
+            }
+
             ExecutePluginSevice("enable", siteName, version);
             var p = memoryCache.Get<PluginInfo>(siteName);
             p.State = "running";
@@ -289,6 +299,16 @@ namespace Mystique
 
         public void DisablePlugin(string siteName, string version)
         {
+            if (string.IsNullOrEmpty(siteName))
+            {
+                throw new ArgumentException("message", nameof(siteName));
+            }
+
+            if (string.IsNullOrEmpty(version))
+            {
+                throw new ArgumentException("message", nameof(version));
+            }
+
             ExecutePluginSevice("disable", siteName, version);
             var p = memoryCache.Get<PluginInfo>(siteName);
             p.State = "stoped";
@@ -297,6 +317,16 @@ namespace Mystique
 
         public void DeletePlugin(string siteName, string version)
         {
+            if (string.IsNullOrEmpty(siteName))
+            {
+                throw new ArgumentException("message", nameof(siteName));
+            }
+
+            if (string.IsNullOrEmpty(version))
+            {
+                throw new ArgumentException("message", nameof(version));
+            }
+
             ExecutePluginSevice("remove", siteName, version);
             var p = memoryCache.Get<PluginInfo>(siteName);
             p.State = "deleted";

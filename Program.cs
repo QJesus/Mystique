@@ -1,6 +1,10 @@
-﻿using Microsoft.AspNetCore.Hosting;
+﻿using log4net;
+using log4net.Config;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using System;
+using System.IO;
 using System.Text;
 
 namespace Mystique
@@ -9,6 +13,8 @@ namespace Mystique
     {
         public static void Main(string[] args)
         {
+            var xml = new FileInfo(Path.Combine(Environment.CurrentDirectory, "log4net.conf.xml"));
+            XmlConfigurator.Configure(LogManager.CreateRepository(".NETCoreRepository"), xml);
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);  // 支持 GB2312 和 GBK 编码
             CreateHostBuilder(args).Build().Run();
         }

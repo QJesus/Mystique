@@ -12,14 +12,14 @@ namespace Mystique.Services
     {
         private readonly IMemoryCache memoryCache;
         private readonly IConfiguration configuration;
-        private readonly IHttpClientFactory httpClientFactory;
+        private readonly HttpClient httpClient;
         private System.Timers.Timer timer;
 
         public HealthCheckBackgroundService(IMemoryCache memoryCache, IConfiguration configuration, IHttpClientFactory httpClientFactory)
         {
             this.memoryCache = memoryCache;
             this.configuration = configuration;
-            this.httpClientFactory = httpClientFactory;
+            this.httpClient = httpClientFactory.CreateClient("plugin-client");
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -40,8 +40,7 @@ namespace Mystique.Services
                         pi ??= new PluginInfo { Name = name, Port = hp.Port, };
                         try
                         {
-                            var url = $"{route.DownstreamScheme}://{hp.Host}:{hp.Port}/hc";
-                            var hrm = await httpClientFactory.CreateClient("internal-client").GetAsync(url);
+                            var hrm = await httpClient.GetAsync($"{name}/hc");
                             pi.State = $"running{(hrm.IsSuccessStatusCode ? "" : $"({hrm.StatusCode.ToString()})")}";
                         }
                         catch
