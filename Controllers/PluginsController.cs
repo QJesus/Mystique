@@ -285,23 +285,23 @@ namespace Mystique
             }
 
             string backup = null;
-            foreach (var srv in Directory.EnumerateFiles(systemctl, $"{siteName}*.service", SearchOption.TopDirectoryOnly).OrderByDescending(x => x).ToArray())
+            var srvs = Services(systemctl);
+            foreach (var item in srvs)
             {
-                var match = Regex.Match(Path.GetFileName(srv), @"([\S]{1,})\.{[\d]{8}}\.service");
-                if (!match.Success)
-                {
-                    continue;
-                }
                 // 停止站点
-                DisablePlugin(match.Groups[1].Value, match.Groups[2].Value);
+                DisablePlugin(item.name, item.version);
 
-                var name = $"{match.Groups[1].Value}.arm64.{match.Groups[2].Value}";
+                var name = $"{item.name}.arm64.{item.version}";
                 var running = Path.Combine(Eusb, name);
                 // 备份可以备份的(只保留一个版本)
                 if (string.IsNullOrEmpty(backup) && Directory.Exists(running))
                 {
                     MoveDirectory(running, backup = Path.Combine(Dead, name), true);
-                    File.Move(srv, Path.Combine(Dead, Path.GetFileName(srv)), true);
+                    File.Move(item.path, Path.Combine(Dead, Path.GetFileName(item.path)), true);
+                }
+                else
+                {
+                    DeletePlugin(item.name, item.version);
                 }
 
                 // 删除不再需要的
@@ -309,9 +309,9 @@ namespace Mystique
                 {
                     Directory.Delete(running, true);
                 }
-                if (File.Exists(srv))
+                if (File.Exists(item.path))
                 {
-                    File.Delete(srv);
+                    File.Delete(item.path);
                 }
             }
             foreach (var site in Directory.EnumerateDirectories(Eusb, $"{siteName}.arm64*", SearchOption.TopDirectoryOnly).ToArray())
@@ -392,6 +392,24 @@ namespace Mystique
             }
         }
 
+        private List<(string path, string name, string version)> Services(params string[] folders)
+        {
+            var data = new List<(string path, string name, string version)>();
+
+            var srvs = folders.SelectMany(f => Directory.EnumerateFiles(f, $"*.service", SearchOption.TopDirectoryOnly)).ToArray();
+            foreach (var srv in srvs)
+            {
+                var match = Regex.Match(Path.GetFileName(srv), @"([\S]{1,})\.{[\d]{8}}\.service");
+                if (!match.Success)
+                {
+                    continue;
+                }
+
+                data.Add((srv, match.Groups[1].Value, match.Groups[2].Value));
+            }
+            return data;
+        }
+
         public void EnablePlugin(string siteName, string version)
         {
             if (string.IsNullOrEmpty(siteName))
@@ -417,6 +435,38 @@ namespace Mystique
             }
             else
             {
+                var alives = Services(systemctl);
+                var alive = alives.FirstOrDefault(x => x.name == siteName && x.version == version);
+                if (!File.Exists(alive.path))
+                {
+                    foreach (var item in alives.Where(x => x.name == siteName))
+                    {
+                        DisablePlugin(item.name, item.version);
+                        var name = $"{item.name}.arm64.{item.version}";
+                        var running = Path.Combine(Eusb, name);
+                        if (Directory.Exists(running))
+                        {
+                            MoveDirectory(running, Path.Combine(Dead, name), true);
+                            File.Move(item.path, Path.Combine(Dead, Path.GetFileName(item.path)), true);
+                        }
+                        else
+                        {
+                            DeletePlugin(item.name, item.version);
+                        }
+                    }
+
+                    var deads = Services(Dead);
+                    var dead = deads.FirstOrDefault(x => x.name == siteName && x.version == version);
+                    if (File.Exists(dead.path))
+                    {
+                        File.Move(dead.path, Path.Combine(systemctl, Path.GetFileName(dead.path)));
+                        MoveDirectory(Path.Combine(dead.path, $"{dead.name}.arm64.{version}"), Eusb);
+                    }
+                    else
+                    {
+                        throw new ArgumentException($"指定的插件不存在, 名称{siteName} 版本{version}");
+                    }
+                }
                 ExecutePluginSevice("enable", siteName, version);
                 p.State = "running";
             }
@@ -450,7 +500,21 @@ namespace Mystique
             }
             else
             {
-                ExecutePluginSevice("disable", siteName, version);
+                var alives = Services(systemctl);
+                var alive = alives.FirstOrDefault(x => x.name == siteName && x.version == version);
+                if (!File.Exists(alive.path))
+                {
+                    var deads = Services(Dead);
+                    var dead = deads.FirstOrDefault(x => x.name == siteName && x.version == version);
+                    if (!File.Exists(dead.path))
+                    {
+                        throw new ArgumentException($"指定的插件不存在, 名称{siteName} 版本{version}");
+                    }
+                }
+                else
+                {
+                    ExecutePluginSevice("disable", siteName, version);
+                }
                 p.State = "stoped";
             }
 
@@ -472,6 +536,11 @@ namespace Mystique
             }
 
             var p = memoryCache.Get<PluginInfo>(siteName);
+            if (p == null)
+            {
+                return;
+            }
+
             if (string.Equals(p.Category, "www", StringComparison.OrdinalIgnoreCase))
             {
                 var from = Path.Combine(Wwwroot, siteName);
@@ -484,7 +553,32 @@ namespace Mystique
             }
             else
             {
-                ExecutePluginSevice("remove", siteName, version);
+                var alives = Services(systemctl);
+                var alive = alives.FirstOrDefault(x => x.name == siteName && x.version == version);
+                if (File.Exists(alive.path))
+                {
+                    ExecutePluginSevice("remove", siteName, version);
+                    File.Delete(alive.path);
+                    var dir = Path.Combine(Eusb, $"{alive.name}.arm64.{alive.version}");
+                    if (Directory.Exists(dir))
+                    {
+                        Directory.Delete(dir, true);
+                    }
+                }
+                else
+                {
+                    var deads = Services(Dead);
+                    var dead = deads.FirstOrDefault(x => x.name == siteName && x.version == version);
+                    if (File.Exists(dead.path))
+                    {
+                        File.Delete(dead.path);
+                        var dir = Path.Combine(Dead, $"{dead.name}.arm64.{dead.version}");
+                        if (Directory.Exists(dir))
+                        {
+                            Directory.Delete(dir, true);
+                        }
+                    }
+                }
             }
 
             p.State = "deleted";
