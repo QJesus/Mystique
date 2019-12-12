@@ -220,7 +220,7 @@ namespace Mystique
                 {
                     MoveDirectory(dest.FullName, Path.Combine(Dead, $"{siteName}.www"));
                 }
-                MoveDirectory(path, dest.FullName);
+                Directory.Move(path, dest.FullName);
 
                 memoryCache.Set(siteName, new PluginInfo { Name = siteName, Version = version, Category = platform, State = "running", Path = dest.FullName });
             }
@@ -607,17 +607,25 @@ namespace Mystique
                 var targetFile = Path.Combine(target, fileInfo.Name);
                 if (overwrite)
                 {
-                    File.Move(fileInfo.FullName, targetFile, true);
+                    if (File.Exists(targetFile))
+                    {
+                        File.Delete(targetFile);
+                    }
+
+                    File.Move(fileInfo.FullName, targetFile);
                 }
                 else
                 {
-                    // skip
+                    if (!File.Exists(targetFile))
+                    {
+                        File.Move(fileInfo.FullName, targetFile);
+                    }
                 }
             }
 
             foreach (var directoryInfo in sourceFolder.EnumerateDirectories("*", SearchOption.TopDirectoryOnly))
             {
-                var back = string.Join("\\", Enumerable.Repeat("..", depth));
+                var back = string.Join("/", Enumerable.Repeat("..", depth));
                 var from = directoryInfo.FullName;
                 var to = Path.GetFullPath(Path.Combine(target, back, directoryInfo.Name));
                 ControlDirectory(from, to, depth + 1, move, overwrite);
