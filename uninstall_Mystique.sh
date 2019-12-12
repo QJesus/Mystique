@@ -5,7 +5,7 @@ program=Mystique
 service_name=$program.service
 target=/opt/smt/eusb_terminal
 
-systemctl stop $service_name
+systemctl kill $service_name
 systemctl disable $service_name
 systemctl daemon-reload
 systemctl status $service_name -l

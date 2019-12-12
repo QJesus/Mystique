@@ -26,12 +26,12 @@ if [ $mode == "enable" ]; then
     systemctl start $service_name
     systemctl daemon-reload
 elif [ $mode == "disable" ]; then
-    systemctl stop $service_name
+    systemctl kill $service_name
     systemctl disable $service_name
     systemctl mask $service_name
     systemctl daemon-reload
 elif [ $mode == "remove" ]; then
-    systemctl stop $service_name
+    systemctl kill $service_name
     systemctl disable $service_name
     systemctl daemon-reload
     rm /etc/systemd/system/$service_name
@@ -52,9 +52,9 @@ elif [ $mode == "add" ]; then
     echo $listen_port >$pids/$program
     echo "listen_port=$listen_port"
 
-    echo "stop old site service: $service_name"
+    echo "kill old site service: $service_name"
     systemctl daemon-reload
-    systemctl stop $service_name
+    systemctl kill $service_name
     systemctl disable $service_name
 
     echo "update site. $source to $target"

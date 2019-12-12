@@ -12,6 +12,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -20,11 +21,13 @@ namespace Mystique.Controllers
     public class PluginsController : Controller
     {
         private readonly IConfiguration configuration;
+        private readonly IWebHostEnvironment webHostEnvironment;
         private readonly PluginManager pluginManager;
 
-        public PluginsController(IConfiguration configuration, PluginManager pluginManager)
+        public PluginsController(IConfiguration configuration, IWebHostEnvironment webHostEnvironment, PluginManager pluginManager)
         {
             this.configuration = configuration;
+            this.webHostEnvironment = webHostEnvironment;
             this.pluginManager = pluginManager;
         }
 
@@ -83,7 +86,6 @@ namespace Mystique.Controllers
             return RedirectToAction("Index");
         }
     }
-
 }
 
 namespace Mystique
@@ -112,7 +114,34 @@ namespace Mystique
     {
         private static readonly object lock_obj = new object();
 
-        private const string sh_name = "plugin_service.sh";
+        private const string sh_name = @"plugin_service.sh";
+
+        private const string systemctl = @"/etc/systemd/system";
+
+        private string Root => RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "D:" : "/";
+
+        /// <summary>
+        ///     插件的运行目录
+        /// </summary>
+        private string Eusb => Path.Combine(Root, "opt", "smt", "eusb_terminal");
+
+        /// <summary>
+        ///     上一个版本的插件，包括服务和软件
+        /// </summary>
+        private string Dead => Path.Combine(Eusb, "dead");
+
+        private string PluginInfoCache
+        {
+            get
+            {
+                var folder = Path.Combine(webHostEnvironment.ContentRootPath, "caches");
+                if (!Directory.Exists(folder))
+                {
+                    Directory.CreateDirectory(folder);
+                }
+                return Path.Combine(folder, "cache.pis");
+            }
+        }
 
         private readonly IConfiguration configuration;
         private readonly IWebHostEnvironment webHostEnvironment;
@@ -145,6 +174,7 @@ namespace Mystique
                 return false;
             }
 
+            // (\S{1,})\.(\S{1,})\.([\d]{8})\.zip
             var match = Regex.Match(Path.GetFileName(zip), configuration.GetSection("PluginRegularRegex").Value);
             //  TODO 校验 zip 格式正确性
             return match.Success;
@@ -159,24 +189,68 @@ namespace Mystique
 
             var match = Regex.Match(Path.GetFileName(zip), configuration.GetSection("PluginRegularRegex").Value);
             var siteName = match.Groups[1].Value;
-            var version = match.Groups[2].Value;
+            var platform = match.Groups[2].Value;
+            var version = match.Groups[3].Value;
+
             var path = Extract(zipStream, siteName);
-            var target = Install(path, siteName, version);
-            var portStr = File.ReadAllText(Path.Combine(webHostEnvironment.ContentRootPath, "pids", siteName));
-            UpdateGateway(siteName, int.Parse(portStr));
-
-            memoryCache.Set(siteName, new PluginInfo
+            var pi = new PluginInfo { Name = siteName, Version = version, Category = platform, };
+            if (string.Equals(platform, "www", StringComparison.OrdinalIgnoreCase))
             {
-                Name = siteName,
-                Port = int.Parse(portStr),
-                Version = version,
-                State = "updated",
-                Path = target,
-            });
+                // 解压到宿主的 wwwroot 中
+                var p = new DirectoryInfo(path);
+                if (p.GetDirectories().Length + p.GetFiles().Length == 1)
+                {
+                    path = p.GetDirectories().First().FullName;
+                }
+                var dest = new DirectoryInfo(Path.Combine(webHostEnvironment.ContentRootPath, "wwwroot", siteName));
+                if (dest.Exists)
+                {
+                    dest.Delete(true);
+                }
+                Directory.Move(path, dest.FullName);
 
-            if (autoRun)
+                pi.State = "running";
+                pi.Path = dest.FullName;
+                memoryCache.Set(siteName, pi);
+            }
+            else
             {
-                EnablePlugin(siteName, version);
+                var target = Install(path, siteName, version);
+                var portStr = File.ReadAllText(Path.Combine(webHostEnvironment.ContentRootPath, "pids", siteName));
+                UpdateGateway(siteName, int.Parse(portStr));
+
+                pi.Port = int.Parse(portStr);
+                pi.State = "updated";
+                pi.Path = target;
+                memoryCache.Set(siteName, pi);
+
+                if (autoRun)
+                {
+                    EnablePlugin(siteName, version);
+                }
+            }
+            FlushPluginInfos();
+        }
+
+        public void FlushPluginInfos()
+        {
+            lock (lock_obj)
+            {
+                var json = JsonConvert.SerializeObject(PluginInfos, Formatting.Indented);
+                File.WriteAllText(PluginInfoCache, json, Encoding.UTF8);
+            }
+        }
+
+        public void ReloadPluginInfos()
+        {
+            lock (lock_obj)
+            {
+                var json = File.Exists(PluginInfoCache) ? File.ReadAllText(PluginInfoCache, Encoding.UTF8) : "[]";
+                var pis = JsonConvert.DeserializeObject<PluginInfo[]>(json);
+                foreach (var pi in pis)
+                {
+                    memoryCache.Set(pi.Name, pi);
+                }
             }
         }
 
@@ -291,10 +365,19 @@ namespace Mystique
                 throw new ArgumentException("message", nameof(version));
             }
 
-            ExecutePluginSevice("enable", siteName, version);
             var p = memoryCache.Get<PluginInfo>(siteName);
-            p.State = "running";
-            memoryCache.Set(siteName, p);
+            if (string.Equals(p.Category, "www", StringComparison.OrdinalIgnoreCase))
+            {
+                // ignore
+            }
+            else
+            {
+                ExecutePluginSevice("enable", siteName, version);
+                p.State = "running";
+                memoryCache.Set(siteName, p);
+
+                FlushPluginInfos();
+            }
         }
 
         public void DisablePlugin(string siteName, string version)
@@ -309,10 +392,20 @@ namespace Mystique
                 throw new ArgumentException("message", nameof(version));
             }
 
-            ExecutePluginSevice("disable", siteName, version);
             var p = memoryCache.Get<PluginInfo>(siteName);
-            p.State = "stoped";
-            memoryCache.Set(siteName, p);
+            if (string.Equals(p.Category, "www", StringComparison.OrdinalIgnoreCase))
+            {
+                // ignore
+            }
+            else
+            {
+                ExecutePluginSevice("disable", siteName, version);
+
+                p.State = "stoped";
+                memoryCache.Set(siteName, p);
+
+                FlushPluginInfos();
+            }
         }
 
         public void DeletePlugin(string siteName, string version)
@@ -327,10 +420,20 @@ namespace Mystique
                 throw new ArgumentException("message", nameof(version));
             }
 
-            ExecutePluginSevice("remove", siteName, version);
             var p = memoryCache.Get<PluginInfo>(siteName);
+            if (string.Equals(p.Category, "www", StringComparison.OrdinalIgnoreCase))
+            {
+                Directory.Delete(p.Path, true);
+            }
+            else
+            {
+                ExecutePluginSevice("remove", siteName, version);
+            }
+
             p.State = "deleted";
             memoryCache.Set(siteName, p);
+
+            FlushPluginInfos();
         }
     }
 
@@ -344,5 +447,6 @@ namespace Mystique
         /// </summary>
         public string State { get; set; }
         public string Path { get; set; }
+        public string Category { get; set; }
     }
 }

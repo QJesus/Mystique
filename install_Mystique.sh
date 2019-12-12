@@ -19,9 +19,9 @@ if [ ! -d $target ]; then
     mkdir -p $target
 fi
 
-echo "stop old $service_name"
+echo "kill old $service_name"
 systemctl daemon-reload
-systemctl stop $service_name
+systemctl kill $service_name
 systemctl disable $service_name
 
 echo "[Unit]

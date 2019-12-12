@@ -12,14 +12,22 @@ namespace Mystique.Services
     {
         private readonly IMemoryCache memoryCache;
         private readonly IConfiguration configuration;
+        private readonly PluginManager pluginManager;
         private readonly HttpClient httpClient;
         private System.Timers.Timer timer;
 
-        public HealthCheckBackgroundService(IMemoryCache memoryCache, IConfiguration configuration, IHttpClientFactory httpClientFactory)
+        public HealthCheckBackgroundService(IMemoryCache memoryCache, IConfiguration configuration, IHttpClientFactory httpClientFactory, PluginManager pluginManager)
         {
             this.memoryCache = memoryCache;
             this.configuration = configuration;
+            this.pluginManager = pluginManager;
             this.httpClient = httpClientFactory.CreateClient("plugin-client");
+        }
+
+        public override Task StartAsync(CancellationToken cancellationToken)
+        {
+            pluginManager.ReloadPluginInfos();
+            return base.StartAsync(cancellationToken);
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -30,28 +38,26 @@ namespace Mystique.Services
 
             async Task HealthCheck()
             {
-                var routes = configuration.GetSection("ReRoutes").Get<List<ReRoute>>().ToArray();
-                foreach (var route in routes)
+                var pis = pluginManager.PluginInfos;
+                foreach (var pi in pis)
                 {
-                    var name = route.UpstreamPathTemplate.Split(new[] { '/' })[1];
-                    foreach (var hp in route.DownstreamHostAndPorts)
+                    if (pi.Port <= 0 || pi.State.Contains("deleted"))
                     {
-                        memoryCache.TryGetValue<PluginInfo>(name, out var pi);
-                        pi ??= new PluginInfo { Name = name, Port = hp.Port, };
-                        try
-                        {
-                            var hrm = await httpClient.GetAsync($"{name}/hc");
-                            pi.State = $"running{(hrm.IsSuccessStatusCode ? "" : $"({hrm.StatusCode.ToString()})")}";
-                        }
-                        catch
-                        {
-                            pi.State = "stoped";
-                        }
-                        memoryCache.Set(name, pi);
+                        continue;
                     }
+                    var name = pi.Name;
+                    try
+                    {
+                        var hrm = await httpClient.GetAsync($"{name}/hc");
+                        pi.State = $"running{(hrm.IsSuccessStatusCode ? "" : $"({hrm.StatusCode.ToString()})")}";
+                    }
+                    catch
+                    {
+                        pi.State = "stoped";
+                    }
+                    memoryCache.Set(name, pi);
                 }
             }
         }
-
     }
 }

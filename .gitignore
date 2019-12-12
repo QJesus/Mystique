@@ -330,3 +330,5 @@ ASALocalRun/
 .mfractor/
 Mystique/host_plugins
 Mystique/host_pids
+zips/
+host_plugins/
