@@ -207,7 +207,6 @@ namespace Mystique
             var version = match.Groups[3].Value;
 
             var path = Extract(zipStream, siteName, platform, version);
-            var pi = new PluginInfo { Name = siteName, Version = version, Category = platform, };
             if (string.Equals(platform, "www", StringComparison.OrdinalIgnoreCase))
             {
                 // 拷贝到宿主的 wwwroot 中
@@ -223,20 +222,16 @@ namespace Mystique
                 }
                 MoveDirectory(path, dest.FullName);
 
-                pi.State = "running";
-                pi.Path = dest.FullName;
-                memoryCache.Set(siteName, pi);
+                memoryCache.Set(siteName, new PluginInfo { Name = siteName, Version = version, Category = platform, State = "running", Path = dest.FullName });
             }
             else
             {
                 var target = Install(path, siteName, version);
-                var portStr = File.ReadAllText(Path.Combine(webHostEnvironment.ContentRootPath, "pids", siteName));
-                UpdateGateway(siteName, int.Parse(portStr));
+                // $cache/port_$program
+                var port = int.Parse(File.ReadAllText(Path.Combine(Cache, $"port_{siteName}")));
+                UpdateGateway(siteName, port);
 
-                pi.Port = int.Parse(portStr);
-                pi.State = "updated";
-                pi.Path = target;
-                memoryCache.Set(siteName, pi);
+                memoryCache.Set(siteName, new PluginInfo { Name = siteName, Version = version, Category = platform, State = "updated", Path = target, Port = port });
 
                 if (autoRun)
                 {
@@ -282,32 +277,56 @@ namespace Mystique
 
         private string Install(string path, string siteName, string version)
         {
+            // path: /opt/smt/eusb_terminal/temp/Miao.Web.arm64.20191212
             var dll = Directory.EnumerateFiles(path, "*.dll", SearchOption.AllDirectories).FirstOrDefault();
             if (dll == null)
             {
                 throw new FileNotFoundException("未找到可执行程序 *.dll");
             }
 
-            File.Copy(sh_name, Path.Combine(Path.GetDirectoryName(dll), sh_name));
+            var hasBackup = false;
+            foreach (var srv in Directory.EnumerateFiles(systemctl, $"{siteName}*.service", SearchOption.TopDirectoryOnly).OrderByDescending(x => x).ToArray())
+            {
+                var match = Regex.Match(Path.GetFileName(srv), @"([\S]{1,})\.{[\d]{8}}\.service");
+                if (!match.Success)
+                {
+                    continue;
+                }
+                // 停止站点
+                DisablePlugin(match.Groups[1].Value, match.Groups[2].Value);
+
+                var name = $"{match.Groups[1].Value}.arm64.{match.Groups[2].Value}";
+                var running = Path.Combine(Eusb, name);
+                // 备份可以备份的(只保留一个版本)
+                if (!hasBackup && Directory.Exists(running))
+                {
+                    MoveDirectory(running, Path.Combine(Dead, name));
+                    File.Move(srv, Path.Combine(Dead, Path.GetFileName(srv)), true);
+                    hasBackup = true;
+                }
+
+                // 删除不再需要的
+                if (Directory.Exists(running))
+                {
+                    Directory.Delete(running, true);
+                }
+                if (File.Exists(srv))
+                {
+                    File.Delete(srv);
+                }
+            }
+            foreach (var site in Directory.EnumerateDirectories(Eusb, $"{siteName}.arm64*", SearchOption.TopDirectoryOnly).ToArray())
+            {
+                // 删除不再需要的
+                Directory.Delete(site);
+            }
 
             var source = Path.GetDirectoryName(dll);
-            var folder = new DirectoryInfo(source).Name;
-            ExecutePluginSevice("add", siteName, version, source, folder);
+            var target = Path.Combine(Eusb, $"{siteName}.arm64.{version}");
+            File.Copy(sh_name, Path.Combine(source, sh_name));
+            ExecutePluginSevice("add", siteName, version, source, target);
 
-            try
-            {
-                Directory.Delete(path, true);
-            }
-            catch { }
-
-            var target = File.ReadAllLines(Path.Combine(Path.GetDirectoryName(dll), sh_name), Encoding.UTF8)
-                .Select(x =>
-                {
-                    var match = Regex.Match(x, @"target=([\S]+)");
-                    return match.Groups[1].Value;
-                })
-                .FirstOrDefault();
-            return Path.Combine(string.IsNullOrEmpty(target) ? "/opt/smt/eusb_terminal" : target, siteName);
+            return Path.Combine(Eusb, siteName);
         }
 
         private void ExecutePluginSevice(params string[] arguments)
