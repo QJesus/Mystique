@@ -114,34 +114,48 @@ namespace Mystique
     {
         private static readonly object lock_obj = new object();
 
+        private static string GetOrCreateDir(string dir)
+        {
+            if (!Directory.Exists(dir))
+            {
+                lock (lock_obj)
+                {
+                    if (!Directory.Exists(dir))
+                    {
+                        Directory.CreateDirectory(dir);
+                    }
+                }
+            }
+            return dir;
+        }
+
         private const string sh_name = @"plugin_service.sh";
 
         private const string systemctl = @"/etc/systemd/system";
 
-        private string Root => RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "D:" : "/";
 
+        private string Root => RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "D:" : "/";
         /// <summary>
         ///     插件的运行目录
         /// </summary>
-        private string Eusb => Path.Combine(Root, "opt", "smt", "eusb_terminal");
-
+        private string Eusb => GetOrCreateDir(Path.Combine(Root, "opt", "smt", "eusb_terminal"));
         /// <summary>
         ///     上一个版本的插件，包括服务和软件
         /// </summary>
-        private string Dead => Path.Combine(Eusb, "dead");
+        private string Dead => GetOrCreateDir(Path.Combine(Eusb, "dead"));
+        /// <summary>
+        ///     缓存信息
+        /// </summary>
+        private string Cache => GetOrCreateDir(Path.Combine(Eusb, "caches"));
+        /// <summary>
+        ///     临时文件目录
+        /// </summary>
+        private string Temp => GetOrCreateDir(Path.Combine(Eusb, "temp"));
+        /// <summary>
+        ///     宿主的静态资源目录
+        /// </summary>
+        private string Wwwroot => Path.Combine(webHostEnvironment.ContentRootPath, "wwwroot");
 
-        private string PluginInfoCache
-        {
-            get
-            {
-                var folder = Path.Combine(webHostEnvironment.ContentRootPath, "caches");
-                if (!Directory.Exists(folder))
-                {
-                    Directory.CreateDirectory(folder);
-                }
-                return Path.Combine(folder, "cache.pis");
-            }
-        }
 
         private readonly IConfiguration configuration;
         private readonly IWebHostEnvironment webHostEnvironment;
@@ -192,22 +206,22 @@ namespace Mystique
             var platform = match.Groups[2].Value;
             var version = match.Groups[3].Value;
 
-            var path = Extract(zipStream, siteName);
+            var path = Extract(zipStream, siteName, platform, version);
             var pi = new PluginInfo { Name = siteName, Version = version, Category = platform, };
             if (string.Equals(platform, "www", StringComparison.OrdinalIgnoreCase))
             {
-                // 解压到宿主的 wwwroot 中
-                var p = new DirectoryInfo(path);
-                if (p.GetDirectories().Length + p.GetFiles().Length == 1)
+                // 拷贝到宿主的 wwwroot 中
+                var di = new DirectoryInfo(path);
+                while (di.GetDirectories().Length == 1 && di.GetFiles().Length == 0)
                 {
-                    path = p.GetDirectories().First().FullName;
+                    path = di.GetDirectories().First().FullName;
                 }
-                var dest = new DirectoryInfo(Path.Combine(webHostEnvironment.ContentRootPath, "wwwroot", siteName));
+                var dest = new DirectoryInfo(Path.Combine(Wwwroot, siteName));
                 if (dest.Exists)
                 {
-                    dest.Delete(true);
+                    MoveDirectory(dest.FullName, Path.Combine(Dead, $"{siteName}.www"));
                 }
-                Directory.Move(path, dest.FullName);
+                MoveDirectory(path, dest.FullName);
 
                 pi.State = "running";
                 pi.Path = dest.FullName;
@@ -237,7 +251,7 @@ namespace Mystique
             lock (lock_obj)
             {
                 var json = JsonConvert.SerializeObject(PluginInfos, Formatting.Indented);
-                File.WriteAllText(PluginInfoCache, json, Encoding.UTF8);
+                File.WriteAllText(Path.Combine(Cache, "cache.pis"), json, Encoding.UTF8);
             }
         }
 
@@ -245,7 +259,7 @@ namespace Mystique
         {
             lock (lock_obj)
             {
-                var json = File.Exists(PluginInfoCache) ? File.ReadAllText(PluginInfoCache, Encoding.UTF8) : "[]";
+                var json = File.Exists(Path.Combine(Cache, "cache.pis")) ? File.ReadAllText(Path.Combine(Cache, "cache.pis"), Encoding.UTF8) : "[]";
                 var pis = JsonConvert.DeserializeObject<PluginInfo[]>(json);
                 foreach (var pi in pis)
                 {
@@ -257,11 +271,11 @@ namespace Mystique
         /// <summary>
         ///     解压到临时目录
         /// </summary>
-        private string Extract(Stream zipStream, string siteName)
+        private string Extract(Stream zipStream, string siteName, string platform, string version)
         {
             var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
             zipStream.Position = 0;
-            var tempPath = Path.Combine(webHostEnvironment.ContentRootPath, "host_plugins", $"{siteName}_{DateTime.Now.Ticks}");
+            var tempPath = Path.Combine(Temp, $"{siteName}.{platform}.{version}");
             archive.ExtractToDirectory(tempPath, true);
             return tempPath;
         }
@@ -368,16 +382,22 @@ namespace Mystique
             var p = memoryCache.Get<PluginInfo>(siteName);
             if (string.Equals(p.Category, "www", StringComparison.OrdinalIgnoreCase))
             {
-                // ignore
+                var from = Path.Combine(Dead, $"{siteName}.www");
+                var to = Path.Combine(Wwwroot, siteName);
+                if (Directory.Exists(from))
+                {
+                    MoveDirectory(from, to);
+                }
+                p.State = Directory.Exists(to) ? "running" : "deleted";
             }
             else
             {
                 ExecutePluginSevice("enable", siteName, version);
                 p.State = "running";
-                memoryCache.Set(siteName, p);
-
-                FlushPluginInfos();
             }
+
+            memoryCache.Set(siteName, p);
+            FlushPluginInfos();
         }
 
         public void DisablePlugin(string siteName, string version)
@@ -395,17 +415,23 @@ namespace Mystique
             var p = memoryCache.Get<PluginInfo>(siteName);
             if (string.Equals(p.Category, "www", StringComparison.OrdinalIgnoreCase))
             {
-                // ignore
+                var from = Path.Combine(Wwwroot, siteName);
+                var to = Path.Combine(Dead, $"{siteName}.www");
+                if (Directory.Exists(from))
+                {
+                    MoveDirectory(from, to);
+                }
+                p.State = Directory.Exists(from) ? "running" : "stoped";
             }
             else
             {
                 ExecutePluginSevice("disable", siteName, version);
-
                 p.State = "stoped";
-                memoryCache.Set(siteName, p);
-
-                FlushPluginInfos();
             }
+
+            memoryCache.Set(siteName, p);
+
+            FlushPluginInfos();
         }
 
         public void DeletePlugin(string siteName, string version)
@@ -423,7 +449,13 @@ namespace Mystique
             var p = memoryCache.Get<PluginInfo>(siteName);
             if (string.Equals(p.Category, "www", StringComparison.OrdinalIgnoreCase))
             {
-                Directory.Delete(p.Path, true);
+                var from = Path.Combine(Wwwroot, siteName);
+                var to = Path.Combine(Dead, $"{siteName}.www");
+                if (Directory.Exists(from))
+                {
+                    MoveDirectory(from, to);
+                }
+                p.State = Directory.Exists(from) ? "running" : "deleted";
             }
             else
             {
@@ -434,6 +466,48 @@ namespace Mystique
             memoryCache.Set(siteName, p);
 
             FlushPluginInfos();
+        }
+
+        /// <summary>
+        ///     移动或重命名一个文件夹（如果存在则合并，而不是出现异常报错）
+        /// </summary>
+        private static void MoveDirectory(string sourceDirectory, string targetDirectory)
+        {
+            MoveDirectory(sourceDirectory, targetDirectory, 0);
+
+            void MoveDirectory(string source, string target, int depth)
+            {
+                if (!Directory.Exists(source))
+                {
+                    return;
+                }
+
+                if (!Directory.Exists(target))
+                {
+                    Directory.CreateDirectory(target);
+                }
+
+                var sourceFolder = new DirectoryInfo(source);
+                foreach (var fileInfo in sourceFolder.EnumerateFiles("*", SearchOption.TopDirectoryOnly))
+                {
+                    var targetFile = Path.Combine(target, fileInfo.Name);
+
+                    if (File.Exists(targetFile))
+                    {
+                        File.Delete(targetFile);
+                    }
+
+                    File.Move(fileInfo.FullName, targetFile);
+                }
+
+                foreach (var directoryInfo in sourceFolder.EnumerateDirectories("*", SearchOption.TopDirectoryOnly))
+                {
+                    var back = string.Join("\\", Enumerable.Repeat("..", depth));
+                    MoveDirectory(directoryInfo.FullName, Path.GetFullPath(Path.Combine(target, back, directoryInfo.Name)), depth + 1);
+                }
+
+                Directory.Delete(source);
+            }
         }
     }
 
