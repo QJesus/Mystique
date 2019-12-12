@@ -243,23 +243,18 @@ namespace Mystique
 
         public void FlushPluginInfos()
         {
-            lock (lock_obj)
-            {
-                var json = JsonConvert.SerializeObject(PluginInfos, Formatting.Indented);
-                File.WriteAllText(Path.Combine(Cache, "cache.pis"), json, Encoding.UTF8);
-            }
+            var json = JsonConvert.SerializeObject(PluginInfos, Formatting.Indented);
+            File.WriteAllText(Path.Combine(Cache, "cache.pis"), json, Encoding.UTF8);
         }
 
         public void ReloadPluginInfos()
         {
-            lock (lock_obj)
+            var json = File.Exists(Path.Combine(Cache, "cache.pis")) ? File.ReadAllText(Path.Combine(Cache, "cache.pis"), Encoding.UTF8) : "[]";
+            var pis = JsonConvert.DeserializeObject<PluginInfo[]>(json);
+            foreach (var pi in pis)
             {
-                var json = File.Exists(Path.Combine(Cache, "cache.pis")) ? File.ReadAllText(Path.Combine(Cache, "cache.pis"), Encoding.UTF8) : "[]";
-                var pis = JsonConvert.DeserializeObject<PluginInfo[]>(json);
-                foreach (var pi in pis)
-                {
-                    memoryCache.Set(pi.Name, pi);
-                }
+                UpdateGateway(pi.Name, pi.Port);
+                memoryCache.Set(pi.Name, pi);
             }
         }
 
@@ -353,42 +348,39 @@ namespace Mystique
 
         private void UpdateGateway(string siteName, int port)
         {
-            lock (lock_obj)
+            var modified = false;
+            var ocelot = Path.Combine(webHostEnvironment.ContentRootPath, "ocelot.json");
+            var oro = JObject.Parse(File.Exists(ocelot) ? File.ReadAllText(ocelot, Encoding.UTF8) : "{}").ToObject<OcelotRootObject>();
+            var route = oro.ReRoutes.FirstOrDefault(f => f.UpstreamPathTemplate == $"/{siteName}/{{url}}");
+            if (route == null)
             {
-                var modified = false;
-                var ocelot = Path.Combine(webHostEnvironment.ContentRootPath, "ocelot.json");
-                var oro = JObject.Parse(File.Exists(ocelot) ? File.ReadAllText(ocelot, Encoding.UTF8) : "{}").ToObject<OcelotRootObject>();
-                var route = oro.ReRoutes.FirstOrDefault(f => f.UpstreamPathTemplate == $"/{siteName}/{{url}}");
-                if (route == null)
+                oro.ReRoutes.Add(route = new ReRoute
                 {
-                    oro.ReRoutes.Add(route = new ReRoute
-                    {
-                        DownstreamPathTemplate = "/{url}",
-                        DownstreamScheme = "http",
-                        UpstreamHttpMethod = new List<string> { "GET", "HEAD", "POST", "OPTIONS", "PUT", "DELETE", "TRACE", "CONNECT", },
-                        UpstreamPathTemplate = $"/{siteName}/{{url}}"
-                    });
-                    modified = true;
-                }
-                route.DownstreamHostAndPorts ??= new List<DownstreamHostAndPort>();
+                    DownstreamPathTemplate = "/{url}",
+                    DownstreamScheme = "http",
+                    UpstreamHttpMethod = new List<string> { "GET", "HEAD", "POST", "OPTIONS", "PUT", "DELETE", "TRACE", "CONNECT", },
+                    UpstreamPathTemplate = $"/{siteName}/{{url}}"
+                });
+                modified = true;
+            }
+            route.DownstreamHostAndPorts ??= new List<DownstreamHostAndPort>();
 
-                // 一个站点只有一个路由
-                var dhap = route.DownstreamHostAndPorts.FirstOrDefault(x => x.Port == port);
-                if (dhap == null)
+            // 一个站点只有一个路由
+            var dhap = route.DownstreamHostAndPorts.FirstOrDefault(x => x.Port == port);
+            if (dhap == null)
+            {
+                route.DownstreamHostAndPorts.Clear();
+                route.DownstreamHostAndPorts.Add(new DownstreamHostAndPort
                 {
-                    route.DownstreamHostAndPorts.Clear();
-                    route.DownstreamHostAndPorts.Add(new DownstreamHostAndPort
-                    {
-                        Host = "127.0.0.1",
-                        Port = port,
-                    });
-                    modified = true;
-                }
+                    Host = "127.0.0.1",
+                    Port = port,
+                });
+                modified = true;
+            }
 
-                if (modified)
-                {
-                    File.WriteAllText(ocelot, JsonConvert.SerializeObject(oro, Formatting.Indented), Encoding.UTF8);
-                }
+            if (modified)
+            {
+                File.WriteAllText(ocelot, JsonConvert.SerializeObject(oro, Formatting.Indented), Encoding.UTF8);
             }
         }
 
