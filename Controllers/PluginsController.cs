@@ -284,7 +284,7 @@ namespace Mystique
                 throw new FileNotFoundException("未找到可执行程序 *.dll");
             }
 
-            var hasBackup = false;
+            string backup = null;
             foreach (var srv in Directory.EnumerateFiles(systemctl, $"{siteName}*.service", SearchOption.TopDirectoryOnly).OrderByDescending(x => x).ToArray())
             {
                 var match = Regex.Match(Path.GetFileName(srv), @"([\S]{1,})\.{[\d]{8}}\.service");
@@ -298,11 +298,10 @@ namespace Mystique
                 var name = $"{match.Groups[1].Value}.arm64.{match.Groups[2].Value}";
                 var running = Path.Combine(Eusb, name);
                 // 备份可以备份的(只保留一个版本)
-                if (!hasBackup && Directory.Exists(running))
+                if (string.IsNullOrEmpty(backup) && Directory.Exists(running))
                 {
-                    MoveDirectory(running, Path.Combine(Dead, name));
+                    MoveDirectory(running, backup = Path.Combine(Dead, name), true);
                     File.Move(srv, Path.Combine(Dead, Path.GetFileName(srv)), true);
-                    hasBackup = true;
                 }
 
                 // 删除不再需要的
@@ -323,7 +322,14 @@ namespace Mystique
 
             var source = Path.GetDirectoryName(dll);
             var target = Path.Combine(Eusb, $"{siteName}.arm64.{version}");
+            if (Directory.Exists(backup))
+            {
+                // 差量更新
+                CopyDirectory(backup, target, true);
+            }
+
             File.Copy(sh_name, Path.Combine(source, sh_name));
+            CopyDirectory(source, target, true);
             ExecutePluginSevice("add", siteName, version, source, target);
 
             return Path.Combine(Eusb, siteName);
@@ -490,41 +496,49 @@ namespace Mystique
         /// <summary>
         ///     移动或重命名一个文件夹（如果存在则合并，而不是出现异常报错）
         /// </summary>
-        private static void MoveDirectory(string sourceDirectory, string targetDirectory)
+        private static void MoveDirectory(string sourceDirectory, string targetDirectory, bool overwrite = true) => ControlDirectory(sourceDirectory, targetDirectory, 0, true, overwrite);
+
+        /// <summary>
+        ///     复制一个文件夹（如果存在则合并，而不是出现异常报错）
+        /// </summary>
+        private static void CopyDirectory(string sourceDirectory, string targetDirectory, bool overwrite = true) => ControlDirectory(sourceDirectory, targetDirectory, 0, false, overwrite);
+
+        private static void ControlDirectory(string source, string target, int depth, bool move, bool overwrite)
         {
-            MoveDirectory(sourceDirectory, targetDirectory, 0);
-
-            void MoveDirectory(string source, string target, int depth)
+            if (!Directory.Exists(source))
             {
-                if (!Directory.Exists(source))
+                return;
+            }
+
+            if (!Directory.Exists(target))
+            {
+                Directory.CreateDirectory(target);
+            }
+
+            var sourceFolder = new DirectoryInfo(source);
+            foreach (var fileInfo in sourceFolder.EnumerateFiles("*", SearchOption.TopDirectoryOnly))
+            {
+                var targetFile = Path.Combine(target, fileInfo.Name);
+                if (overwrite)
                 {
-                    return;
+                    File.Move(fileInfo.FullName, targetFile, true);
                 }
-
-                if (!Directory.Exists(target))
+                else
                 {
-                    Directory.CreateDirectory(target);
+                    // skip
                 }
+            }
 
-                var sourceFolder = new DirectoryInfo(source);
-                foreach (var fileInfo in sourceFolder.EnumerateFiles("*", SearchOption.TopDirectoryOnly))
-                {
-                    var targetFile = Path.Combine(target, fileInfo.Name);
+            foreach (var directoryInfo in sourceFolder.EnumerateDirectories("*", SearchOption.TopDirectoryOnly))
+            {
+                var back = string.Join("\\", Enumerable.Repeat("..", depth));
+                var from = directoryInfo.FullName;
+                var to = Path.GetFullPath(Path.Combine(target, back, directoryInfo.Name));
+                ControlDirectory(from, to, depth + 1, move, overwrite);
+            }
 
-                    if (File.Exists(targetFile))
-                    {
-                        File.Delete(targetFile);
-                    }
-
-                    File.Move(fileInfo.FullName, targetFile);
-                }
-
-                foreach (var directoryInfo in sourceFolder.EnumerateDirectories("*", SearchOption.TopDirectoryOnly))
-                {
-                    var back = string.Join("\\", Enumerable.Repeat("..", depth));
-                    MoveDirectory(directoryInfo.FullName, Path.GetFullPath(Path.Combine(target, back, directoryInfo.Name)), depth + 1);
-                }
-
+            if (move)
+            {
                 Directory.Delete(source);
             }
         }

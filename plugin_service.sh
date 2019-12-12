@@ -70,7 +70,7 @@ Environment=DOTNET_PRINT_TELEMETRY_MESSAGE=false
 
 [Install]
 WantedBy=multi-user.target" >/etc/systemd/system/$service_name
-    mv $source $target
+    #mv $source $target
     echo "chmod +x $target/$program"
     chmod +x $target/$program
 else
