@@ -317,7 +317,7 @@ namespace Mystique
             foreach (var site in Directory.EnumerateDirectories(Eusb, $"{siteName}.arm64*", SearchOption.TopDirectoryOnly).ToArray())
             {
                 // 删除不再需要的
-                Directory.Delete(site);
+                Directory.Delete(site, true);
             }
 
             var source = Path.GetDirectoryName(dll);
@@ -328,7 +328,7 @@ namespace Mystique
                 CopyDirectory(backup, target, true);
             }
 
-            File.Copy(sh_name, Path.Combine(source, sh_name));
+            File.Copy(sh_name, Path.Combine(source, sh_name), true);
             CopyDirectory(source, target, true);
             ExecutePluginSevice("add", siteName, version, source, target);
 

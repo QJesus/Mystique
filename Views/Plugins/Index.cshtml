@@ -5,16 +5,17 @@
 
 <h1>Plugin Management</h1>
 
-<button type="button" class="btn btn-primary" onclick="window.location = '@Url.Action("Add","Plugins")';">+ Add New</button>
+<button type="button" class="btn btn-primary" onclick="window.location = '@Url.Action("Add", "Plugins")';">添加插件</button>
 
 <table class="table table-bordered">
     <thead>
         <tr>
-            <th>Name</th>
-            <th>Version</th>
-            <th>Port</th>
-            <th>State</th>
-            <th>Control</th>
+            <th>名称</th>
+            <th>版本</th>
+            <th>端口号</th>
+            <th>状态</th>
+            <th>位置</th>
+            <th>控制</th>
         </tr>
     </thead>
     <tbody>
@@ -27,8 +28,9 @@
                     <td>@row.Version</td>
                     <td>@row.Port</td>>
                     <td>@row.State</td>
+                    <td>@row.Path</td>
                     <td>
-                        @if (row.State == "running")
+                        @if (row.State.StartsWith("running"))
                         {
                             <button type="button" class="btn-danger" onclick="window.location = '@Url.Action("Disable","Plugins", new { name = row.Name, version = row.Version })';">禁用</button>
                         }

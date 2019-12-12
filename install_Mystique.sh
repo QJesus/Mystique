@@ -13,7 +13,7 @@ if [ ! -d $source ]; then
     return
 fi
 
-target=/opt/smt/eusb_terminal
+target=/opt/smt/eusb_terminal/$folder
 if [ ! -d $target ]; then
     echo "mkdir -p $target"
     mkdir -p $target
@@ -28,8 +28,8 @@ echo "[Unit]
 Description=$program
 
 [Service]
-WorkingDirectory=$target/$folder
-ExecStart=$target/$folder/$program --urls=http://*:$listen_port
+WorkingDirectory=$target
+ExecStart=$target/$program --urls=http://*:$listen_port
 Restart=always
 RestartSec=12
 KillSignal=SIGINT
@@ -43,12 +43,12 @@ Environment=DOTNET_PRINT_TELEMETRY_MESSAGE=false
 [Install]
 WantedBy=multi-user.target" >/etc/systemd/system/$service_name
 
-echo "cp -r $source $target"
-cp -r $source $target
-echo "chmod +x $target/$folder/$program"
-chmod +x $target/$folder/$program
-echo "chmod +x $target/$folder/plugin_service.sh"
-chmod +x $target/$folder/plugin_service.sh
+echo "cp -r $source /opt/smt/eusb_terminal"
+cp -r $source /opt/smt/eusb_terminal
+echo "chmod +x $target/$program"
+chmod +x $target/$program
+echo "chmod +x $target/plugin_service.sh"
+chmod +x $target/plugin_service.sh
 
 echo "start $service_name"
 systemctl enable $service_name

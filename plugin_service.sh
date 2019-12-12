@@ -8,7 +8,7 @@ target=$5
 
 service_name=$program.$version.service
 
-cache=$target/caches
+cache=/opt/smt/eusb_terminal/caches
 if [ ! -d $cache ]; then
     echo "mkdir -p $cache"
     mkdir -p $cache
@@ -44,7 +44,7 @@ elif [ $mode == "add" ]; then
         listen_port=$port
     fi
     echo $listen_port >$cache/port_$program
-    echo "listen_port=$listen_port"
+    echo "listen_port at $cache/port_$program=$listen_port"
 
     echo "kill old site service: $service_name"
     systemctl daemon-reload
