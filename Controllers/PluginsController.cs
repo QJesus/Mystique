@@ -220,7 +220,7 @@ namespace Mystique
                 {
                     MoveDirectory(dest.FullName, Path.Combine(Dead, $"{siteName}.www"));
                 }
-                Directory.Move(path, dest.FullName);
+                MoveDirectory(path, dest.FullName);
 
                 memoryCache.Set(siteName, new PluginInfo { Name = siteName, Version = version, Category = platform, State = "running", Path = dest.FullName });
             }
@@ -391,7 +391,7 @@ namespace Mystique
             var srvs = folders.SelectMany(f => Directory.EnumerateFiles(f, $"*.service", SearchOption.TopDirectoryOnly)).ToArray();
             foreach (var srv in srvs)
             {
-                var match = Regex.Match(Path.GetFileName(srv), @"([\S]{1,})\.{[\d]{8}}\.service");
+                var match = Regex.Match(Path.GetFileName(srv), @"([\S]{1,})\.([\d]{8})\.service");
                 if (!match.Success)
                 {
                     continue;
